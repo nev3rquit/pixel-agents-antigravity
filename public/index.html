@@ -520,6 +520,7 @@
         <div class="team-bar" id="team-pills"></div>
         <button id="project-switcher-btn" onclick="openProjectModal()" title="Cambia Progetto Target / Switch Target Workspace" style="background:#21262d; color:#3fb950; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;">📂 <span id="label-project-btn">Progetto:</span> <code id="active-project-name" style="color:#f0f6fc; font-family:Consolas,monospace;">AziendaAI</code></button>
         <button id="kanban-toggle-btn" onclick="openKanbanModal()" style="background:#21262d; color:#58a6ff; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;">📋 <span id="label-kanban-btn">Lavagna Task</span> <span id="kanban-count-badge" style="background:#1f6feb; color:#fff; border-radius:99px; padding:1px 6px; font-size:0.68rem;">0</span></button>
+        <button id="sound-toggle-btn" onclick="toggleRetroSound()" title="Effetti Sonori 8-Bit / 8-Bit Sound Effects" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:5px 9px; font-size:0.78rem; font-weight:700; cursor:pointer;">🔊</button>
         <button id="lang-toggle-btn" onclick="toggleAppLang()" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">🇮🇹 IT</button>
       </div>
     </header>
@@ -1235,6 +1236,7 @@
 
           // Richiesta di autorizzazione / permessi interattiva (FASE 2)
           if (msg.type === 'agentPermissionRequest') {
+            playRetroSound('permission');
             const targetId = Number(msg.id || msg.agentId || 10);
             activePermissions[targetId] = {
               agentId: targetId,
@@ -1263,6 +1265,7 @@
 
           // Risultato reale del comando eseguito dal Command Bridge Reale
           if (msg.type === 'commandResult') {
+            playRetroSound(msg.exitCode === 0 ? 'complete' : 'permission');
             const targetId = Number(msg.id || msg.agentId || 10);
             const time = msg.time || new Date().toLocaleTimeString();
             appendCommandResultElement(targetId, msg.command, msg.output, msg.exitCode, time);
@@ -1323,6 +1326,7 @@
 
           // Instradamento fisico: un agente (es. Alberto CEO) cammina verso un sottoposto e mostra il popup "Message from Parent Agent"
           if (msg.type === 'agentDelegation') {
+            playRetroSound(Number(msg.toAgentId) === 10 ? 'complete' : 'delegation');
             if (isLoungeBreakActive) setLoungeBreak(false, false);
             triggerAgentDelegationWalk(
               Number(msg.fromAgentId || 10),
@@ -1335,14 +1339,17 @@
 
           // Pausa Caffè / Divano in Sala Relax (Automatica su Rest / Inattività o Manuale)
           if (msg.type === 'loungeBreakState') {
+            playRetroSound('lounge');
             setLoungeBreak(Boolean(msg.active), false);
           }
           if (msg.type === 'agentModeChange' && msg.mode) {
+            playRetroSound('lounge');
             setLoungeBreak(msg.mode === 'rest', false);
           }
 
           // Riunione Generale / Standup Meeting attorno alla scrivania di Alberto (CEO)
           if (msg.type === 'standupMeetingStarted') {
+            playRetroSound('standup');
             startStandupAnimation(msg.topic, false);
           }
 
@@ -1792,6 +1799,61 @@
       };
 
       fetchActiveProject();
+
+      // =========================================================================
+      // INNOVAZIONE #5: MOTORE AUDIO SINTETIZZATO RETRO 8-BIT (WEBAUDIO API)
+      // =========================================================================
+      let retroSoundEnabled = localStorage.getItem('aziendaai_sound') !== 'off';
+      let audioCtx = null;
+
+      function updateSoundButtonUI() {
+        const btn = document.getElementById('sound-toggle-btn');
+        if (!btn) return;
+        btn.textContent = retroSoundEnabled ? '🔊' : '🔇';
+        btn.style.opacity = retroSoundEnabled ? '1' : '0.55';
+      }
+
+      window.toggleRetroSound = function() {
+        retroSoundEnabled = !retroSoundEnabled;
+        localStorage.setItem('aziendaai_sound', retroSoundEnabled ? 'on' : 'off');
+        updateSoundButtonUI();
+        if (retroSoundEnabled) playRetroSound('complete');
+      };
+
+      function playRetroSound(kind) {
+        if (!retroSoundEnabled) return;
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          if (!audioCtx) audioCtx = new Ctx();
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+
+          const patterns = {
+            delegation: [ { f: 523.25, d: 0.06, t: 'square' }, { f: 659.25, d: 0.08, t: 'square' } ],
+            complete:   [ { f: 523.25, d: 0.06, t: 'triangle' }, { f: 659.25, d: 0.06, t: 'triangle' }, { f: 783.99, d: 0.11, t: 'triangle' } ],
+            permission: [ { f: 440.00, d: 0.09, t: 'sawtooth' }, { f: 349.23, d: 0.12, t: 'sawtooth' } ],
+            standup:    [ { f: 587.33, d: 0.07, t: 'square' }, { f: 783.99, d: 0.07, t: 'square' }, { f: 987.77, d: 0.12, t: 'square' } ],
+            lounge:     [ { f: 493.88, d: 0.08, t: 'sine' }, { f: 392.00, d: 0.12, t: 'sine' } ]
+          };
+          const seq = patterns[kind] || patterns.delegation;
+          let offset = audioCtx.currentTime;
+          for (const note of seq) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = note.t || 'square';
+            osc.frequency.setValueAtTime(note.f, offset);
+            gain.gain.setValueAtTime(0.045, offset);
+            gain.gain.exponentialRampToValueAtTime(0.001, offset + note.d);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(offset);
+            osc.stop(offset + note.d);
+            offset += note.d + 0.015;
+          }
+        } catch {}
+      }
+
+      updateSoundButtonUI();
 
       applyLanguage();
 
