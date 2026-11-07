@@ -618,25 +618,25 @@
       display: none;
       position: fixed;
       z-index: 9999;
-      max-width: 310px;
-      min-width: 220px;
-      background: rgba(13, 17, 23, 0.96);
+      max-width: 440px;
+      min-width: 280px;
+      background: rgba(13, 17, 23, 0.97);
       border: 2px solid #58a6ff;
-      border-radius: 10px;
-      padding: 10px 13px;
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 14px rgba(88, 166, 255, 0.35);
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.85), 0 0 18px rgba(88, 166, 255, 0.45);
       color: #e6edf3;
       font-family: 'Segoe UI', system-ui, sans-serif;
       pointer-events: none;
       transform: translate(-50%, -100%);
       transition: opacity 0.25s ease;
     ">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; border-bottom:1px solid #30363d; padding-bottom:4px;">
-        <span style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#58a6ff;">📨 Message from Parent Agent</span>
-        <span id="parent-popup-badge" style="font-size:0.66rem; background:#1f6feb; color:#fff; padding:1px 6px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; border-bottom:1px solid #30363d; padding-bottom:5px;">
+        <span style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#58a6ff;">📨 Message from Parent Agent</span>
+        <span id="parent-popup-badge" style="font-size:0.70rem; background:#1f6feb; color:#fff; padding:2px 8px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
       </div>
-      <div id="parent-popup-text" style="font-size:0.78rem; line-height:1.35; color:#f0f6fc; word-break:break-word; max-height:95px; overflow:hidden;"></div>
-      <div id="parent-popup-step" style="font-size:0.68rem; color:#8b949e; margin-top:5px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
+      <div id="parent-popup-text" style="font-size:0.86rem; line-height:1.45; color:#f0f6fc; word-break:break-word; max-height:180px; overflow-y:auto;"></div>
+      <div id="parent-popup-step" style="font-size:0.72rem; color:#8b949e; margin-top:6px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
     </div>
 
     <!-- INNOVAZIONE #3: MODALE LAVAGNA KANBAN LIVE (3 COLONNE) -->
@@ -1581,7 +1581,7 @@
         const office = window.__officeState;
         const t = I18N[appLang] || I18N.it;
         const cleanMsg = String(messageText || '').replace(/^Messaggio operativo.*?:\s*/i, '').trim();
-        const shortMsg = cleanMsg.length > 170 ? cleanMsg.slice(0, 167) + '...' : cleanMsg;
+        const shortMsg = cleanMsg.length > 350 ? cleanMsg.slice(0, 347) + '...' : cleanMsg;
         const time = new Date().toLocaleTimeString();
 
         appendLog(fromId, `[${time}] ${t.walkLog(toName, shortMsg)}`, 'task');
@@ -1662,6 +1662,10 @@
             activeDelegationAnim = null;
           }
           if (sender) sender.isDelivering = false;
+          // Segna il completamento dello scambio in modo che entrambi possano tornare Idle
+          agentWorking[Number(fromId)] = false;
+          agentLastActiveAt[Number(fromId)] = Date.now();
+          agentLastActiveAt[Number(toId)] = Date.now();
           if (typeof onComplete === 'function') onComplete();
         }
 
@@ -1674,24 +1678,24 @@
           parentPopup.style.top = `${Math.max(80, pos.y)}px`;
 
           const senderDist = Math.abs(sender.tileCol - destTile.col) + Math.abs(sender.tileRow - destTile.row);
-          // Verifica rigorosa: il ricevente deve essere arrivato e seduto alla sua scrivania PC
+          // Verifica: il ricevente deve essere arrivato o seduto alla sua scrivania PC
           const receiverDeskCol = receiverDeskSeat ? receiverDeskSeat.seatCol : -1;
           const receiverDeskRow = receiverDeskSeat ? receiverDeskSeat.seatRow : -1;
           const receiverAtDeskTile = (receiver.tileCol === receiverDeskCol && receiver.tileRow === receiverDeskRow);
           const receiverPathFinished = (!receiver.path || receiver.path.length === 0);
-          const receiverIsSeatedAtDesk = receiverPathFinished && (receiver.seatId === receiverDeskSeatId || receiverAtDeskTile);
-          const walkTimeout = (Date.now() - walkStart > 9000);
+          const receiverIsSeatedAtDesk = receiverPathFinished && (receiver.seatId === receiverDeskSeatId || receiverAtDeskTile || !agentOnSofa[Number(toId)]);
+          const walkTimeout = (Date.now() - walkStart > 6000);
 
           if (phase === 'walking_to_target') {
             const senderArrived = (!sender.path || sender.path.length === 0 || senderDist <= 1);
-            // La fase di dialogo scatta solo quando Alberto è arrivato E il ricevente è seduto al suo PC (o dopo safety timeout)
+            // La fase di dialogo scatta appena Alberto è vicino e il collega è posizionato (o timeout breve)
             if ((senderArrived && receiverIsSeatedAtDesk) || walkTimeout) {
               phase = 'talking';
               talkStart = Date.now();
               parentPopupStep.textContent = tNow.talkStep(shortFrom, shortTo);
               try { office.showWaitingBubble(receiver.id, false); } catch {}
             }
-          } else if (phase === 'talking' && Date.now() - talkStart > 4500) {
+          } else if (phase === 'talking' && Date.now() - talkStart > 6500) {
             phase = 'returning';
             parentPopupStep.textContent = tNow.returnStep(shortFrom);
             sender.isDelivering = false;
@@ -1859,7 +1863,7 @@
         }
       };
 
-      const IDLE_LOUNGE_TIMEOUT_MS = 30000; // 30 secondi di inattività prima di andare in lounge
+      const IDLE_LOUNGE_TIMEOUT_MS = 14000; // Delay bilanciato di ~14s di inattività dopo il completamento prima di andare sul divano
 
       // Routine di sincronizzazione automatica Idle = Divanetti Lounge / Working = Scrivania PC
       function syncOfficeLoungeAndDesks() {
@@ -1879,12 +1883,16 @@
             // DEVE STARE AL PC ALLA SCRIVANIA
             if (agentOnSofa[id]) {
               setAgentLounge(id, false, true);
+              const tNow = I18N[appLang] || I18N.it;
+              appendLog(id, `[${new Date().toLocaleTimeString()}] ${tNow.loungeExitLog}`, 'task');
             }
             ensureAgentAtWorkDesk(id);
           } else {
-            // INATTIVO (IDLE) DA OLTRE 30 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
+            // INATTIVO (IDLE) DA OLTRE 22 SECONDI: RITORNA SEDUTO SUL DIVANO IN SALA RELAX
             if (!agentOnSofa[id]) {
               setAgentLounge(id, true, false);
+              const tNow = I18N[appLang] || I18N.it;
+              appendLog(id, `[${new Date().toLocaleTimeString()}] ${tNow.loungeEnterLog}`, 'activity');
             } else {
               // Rinforza lo stato di permanenza rilassata sul divanetto
               ch.isActive = false;
