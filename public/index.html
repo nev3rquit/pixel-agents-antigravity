@@ -545,7 +545,6 @@
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
             <span class="badge" id="drawer-status-badge">ONLINE</span>
-            <span class="discord-badge" id="discord-status-badge" onclick="promptDiscordWebhook()">💬 Discord: OFF</span>
           </div>
         </div>
 
@@ -1178,34 +1177,6 @@
           console.error('[Webview] Errore ws message:', err);
         }
       };
-      window.promptDiscordWebhook = function() {
-        const current = localStorage.getItem('azienda_discord_webhook') || '';
-        const url = window.prompt('Inserisci il Webhook URL del tuo canale Discord:\n(I messaggi e le task verranno replicati su Discord)', current);
-        if (url !== null) {
-          const trimmed = url.trim();
-          localStorage.setItem('azienda_discord_webhook', trimmed);
-          updateDiscordBadge();
-          if (trimmed && ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'setDiscordWebhook', webhookUrl: trimmed }));
-          }
-        }
-      };
-
-      function updateDiscordBadge() {
-        const url = localStorage.getItem('azienda_discord_webhook');
-        if (url && url.startsWith('http')) {
-          discordStatusBadge.textContent = '💬 Discord: ON';
-          discordStatusBadge.style.color = '#58a6ff';
-          discordStatusBadge.style.borderColor = '#58a6ff';
-          discordStatusBadge.style.background = 'rgba(88, 166, 255, 0.15)';
-        } else {
-          discordStatusBadge.textContent = '💬 Discord: Configura';
-          discordStatusBadge.style.color = '#8b949e';
-          discordStatusBadge.style.borderColor = '#30363d';
-          discordStatusBadge.style.background = '#21262d';
-        }
-      }
-      updateDiscordBadge();
 
       // =========================================================================
       // INSTRADAMENTO FISICO AGENTI & POPUP "MESSAGE FROM PARENT AGENT"
