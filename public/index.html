@@ -1324,6 +1324,10 @@
           if (msg.type === 'agentPermissionRequest') {
             playRetroSound('permission');
             const targetId = Number(msg.id || msg.agentId || 10);
+            agentWorking[targetId] = true;
+            agentLastActiveAt[targetId] = Date.now();
+            agentOnSofa[targetId] = false;
+            ensureAgentAtWorkDesk(targetId);
             activePermissions[targetId] = {
               agentId: targetId,
               requestId: msg.requestId,
@@ -1353,6 +1357,10 @@
           if (msg.type === 'commandResult') {
             playRetroSound(msg.exitCode === 0 ? 'complete' : 'permission');
             const targetId = Number(msg.id || msg.agentId || 10);
+            agentWorking[targetId] = true;
+            agentLastActiveAt[targetId] = Date.now();
+            agentOnSofa[targetId] = false;
+            ensureAgentAtWorkDesk(targetId);
             const time = msg.time || new Date().toLocaleTimeString();
             appendCommandResultElement(targetId, msg.command, msg.output, msg.exitCode, time);
           }
@@ -1380,6 +1388,7 @@
             const targetId = Number(msg.id || msg.agentId || 10);
             agentWorking[targetId] = true;
             agentLastActiveAt[targetId] = Date.now();
+            agentOnSofa[targetId] = false;
             setAgentLounge(targetId, false, true);
             ensureAgentAtWorkDesk(targetId);
             const desc = msg.status || (msg.toolName ? ('Eseguo: ' + msg.toolName) : 'Comando in esecuzione');
@@ -1393,6 +1402,7 @@
             const targetId = Number(msg.agentId || msg.id || 10);
             agentWorking[targetId] = true;
             agentLastActiveAt[targetId] = Date.now();
+            agentOnSofa[targetId] = false;
             setAgentLounge(targetId, false, true);
             ensureAgentAtWorkDesk(targetId);
             if (msg.status) {
@@ -1471,6 +1481,17 @@
           if (msg.type === 'tasksQueueUpdated' && Array.isArray(msg.queue)) {
             kanbanTasks = msg.queue;
             renderKanbanBoard();
+            kanbanTasks.forEach(task => {
+              if (task.status === 'running' || task.status === 'dispatched') {
+                const aId = Number(task.agentId);
+                if (aId && agentWorking[aId] !== undefined) {
+                  agentWorking[aId] = true;
+                  agentLastActiveAt[aId] = Date.now();
+                  agentOnSofa[aId] = false;
+                  ensureAgentAtWorkDesk(aId);
+                }
+              }
+            });
           }
 
           // Cambio Progetto Target sincronizzato da Web o Discord
@@ -1653,12 +1674,16 @@
           parentPopup.style.top = `${Math.max(80, pos.y)}px`;
 
           const senderDist = Math.abs(sender.tileCol - destTile.col) + Math.abs(sender.tileRow - destTile.row);
-          // Verifica se il ricevente si è già seduto alla sua scrivania al PC
-          const receiverIsSeatedAtDesk = (receiver.seatId === receiverDeskSeatId) && (!receiver.path || receiver.path.length === 0);
-          const walkTimeout = (Date.now() - walkStart > 7500);
+          // Verifica rigorosa: il ricevente deve essere arrivato e seduto alla sua scrivania PC
+          const receiverDeskCol = receiverDeskSeat ? receiverDeskSeat.seatCol : -1;
+          const receiverDeskRow = receiverDeskSeat ? receiverDeskSeat.seatRow : -1;
+          const receiverAtDeskTile = (receiver.tileCol === receiverDeskCol && receiver.tileRow === receiverDeskRow);
+          const receiverPathFinished = (!receiver.path || receiver.path.length === 0);
+          const receiverIsSeatedAtDesk = receiverPathFinished && (receiver.seatId === receiverDeskSeatId || receiverAtDeskTile);
+          const walkTimeout = (Date.now() - walkStart > 9000);
 
           if (phase === 'walking_to_target') {
-            const senderArrived = (sender.path.length === 0 || senderDist <= 1);
+            const senderArrived = (!sender.path || sender.path.length === 0 || senderDist <= 1);
             // La fase di dialogo scatta solo quando Alberto è arrivato E il ricevente è seduto al suo PC (o dopo safety timeout)
             if ((senderArrived && receiverIsSeatedAtDesk) || walkTimeout) {
               phase = 'talking';
@@ -1755,10 +1780,16 @@
         const ch = office.characters.get(id);
         if (!ch || ch.isDelivering) return;
 
+        agentOnSofa[id] = false;
         const deskSeatId = WORK_DESK_SEATS[id];
         if (!deskSeatId) return;
 
-        moveAgentToSeat(id, deskSeatId, false);
+        const deskSeat = office.seats ? office.seats.get(deskSeatId) : null;
+        const notAtDesk = !deskSeat || ch.seatId !== deskSeatId || (ch.path && ch.path.length === 0 && (ch.tileCol !== deskSeat.seatCol || ch.tileRow !== deskSeat.seatRow));
+
+        if (notAtDesk) {
+          moveAgentToSeat(id, deskSeatId, false);
+        }
       }
 
       function updateLoungeChipUI() {
@@ -1774,8 +1805,8 @@
         const office = window.__officeState;
         if (!office || !office.characters) return;
 
-        // Regola 2: Chi lavora DEVE RESTARE ALLA SCRIVANIA!
-        if (onSofa && agentWorking[id] && !force) {
+        // Regola 2: Chi lavora DEVE RESTARE ALLA SCRIVANIA PC! Mai sul divano se sta lavorando!
+        if (onSofa && agentWorking[id]) {
           return;
         }
 
@@ -1804,8 +1835,8 @@
         TEAM.forEach(a => {
           if (active) {
             // Regola 3: Vanno sul divano SOLO gli agenti inattivi (Idle, non working)
-            if (forceAll || !agentWorking[a.id]) {
-              setAgentLounge(a.id, true, forceAll);
+            if (!agentWorking[a.id]) {
+              setAgentLounge(a.id, true, false);
             }
           } else {
             setAgentLounge(a.id, false, true);
@@ -1828,6 +1859,8 @@
         }
       };
 
+      const IDLE_LOUNGE_TIMEOUT_MS = 30000; // 30 secondi di inattività prima di andare in lounge
+
       // Routine di sincronizzazione automatica Idle = Divanetti Lounge / Working = Scrivania PC
       function syncOfficeLoungeAndDesks() {
         const office = window.__officeState;
@@ -1840,7 +1873,7 @@
           const ch = office.characters.get(id);
           if (!ch || ch.isDelivering) return; // Se sta camminando per una consegna di delega, non interrompere
 
-          const isActivelyWorking = Boolean(agentWorking[id]) || (now - (agentLastActiveAt[id] || 0) < 25000);
+          const isActivelyWorking = Boolean(agentWorking[id]) || (now - (agentLastActiveAt[id] || 0) < IDLE_LOUNGE_TIMEOUT_MS);
 
           if (isActivelyWorking) {
             // DEVE STARE AL PC ALLA SCRIVANIA
@@ -1849,7 +1882,7 @@
             }
             ensureAgentAtWorkDesk(id);
           } else {
-            // INATTIVO (IDLE) DA OLTRE 20 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
+            // INATTIVO (IDLE) DA OLTRE 30 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
             if (!agentOnSofa[id]) {
               setAgentLounge(id, true, false);
             } else {
