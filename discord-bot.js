@@ -1,9 +1,67 @@
 const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const routing = require('./routing');
+
+const DAEMON_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'daemon');
+let cachedDaemonConfig = null;
+
+async function probeDaemonConfig(cfg) {
+  return new Promise(resolve => {
+    const body = JSON.stringify({});
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: cfg.httpPort,
+      path: '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',
+      method: 'POST',
+      timeout: 1000,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-codeium-csrf-token': cfg.csrfToken,
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, res => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function getActiveDaemonConfig() {
+  if (cachedDaemonConfig && await probeDaemonConfig(cachedDaemonConfig)) {
+    return cachedDaemonConfig;
+  }
+  cachedDaemonConfig = null;
+  try {
+    if (!fs.existsSync(DAEMON_DIR)) return null;
+    const hubFiles = fs.readdirSync(DAEMON_DIR)
+      .filter(f => f.startsWith('hub_') && f.endsWith('.json'))
+      .map(f => {
+        const full = path.join(DAEMON_DIR, f);
+        return { file: f, mtime: fs.statSync(full).mtimeMs, path: full };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    for (const h of hubFiles) {
+      try {
+        const cfg = JSON.parse(fs.readFileSync(h.path, 'utf8'));
+        if (cfg.httpPort && cfg.csrfToken) {
+          if (await probeDaemonConfig(cfg)) {
+            cachedDaemonConfig = cfg;
+            return cfg;
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+  return null;
+}
 
 const CONFIG_PATH = path.join(__dirname, 'discord.config.json');
 let BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
@@ -136,25 +194,37 @@ function initDiscordBot(onBroadcast) {
     const activeProj = routing.getTargetProject();
     const msgContent = `[Progetto Target Attivo: ${activeProj}] Messaggio operativo ricevuto da Discord (${message.author.username}): ${content}`;
 
-    execFile(SERVER_EXE, ['agentapi', 'send-message', routing.resolveSubagent(target.id), msgContent], { timeout: 15000, windowsHide: true }, (err, stdout, stderr) => {
-      if (err) {
-        message.channel.send(`❌ Errore recapito a ${target.name}: ${err.message}`).catch(() => {});
-      } else {
-        try {
-          message.react('✅');
-        } catch {}
-
-        if (broadcastCallback) {
-          broadcastCallback({
-            type: 'agentActivity',
-            id: target.id,
-            agentId: target.id,
-            tool: 'Discord Inbound',
-            status: `Task da Discord: ${content.slice(0, 50)}`,
-            log: `[${new Date().toLocaleTimeString()}] 💬 Ricevuto da Discord (${message.author.username}): "${content}"`
-          });
-        }
+    getActiveDaemonConfig().then(daemonCfg => {
+      const childEnv = Object.assign({}, process.env);
+      if (daemonCfg && daemonCfg.httpPort) {
+        childEnv.ANTIGRAVITY_LS_ADDRESS = `127.0.0.1:${daemonCfg.httpPort}`;
       }
+      if (daemonCfg && daemonCfg.csrfToken) {
+        childEnv.ANTIGRAVITY_CSRF_TOKEN = daemonCfg.csrfToken;
+      }
+
+      execFile(SERVER_EXE, ['agentapi', 'send-message', routing.resolveSubagent(target.id), msgContent], { timeout: 15000, windowsHide: true, env: childEnv }, (err, stdout, stderr) => {
+        if (err) {
+          message.channel.send(`❌ Errore recapito a ${target.name}: ${err.message}`).catch(() => {});
+        } else {
+          try {
+            message.react('✅');
+          } catch {}
+
+          if (broadcastCallback) {
+            broadcastCallback({
+              type: 'agentActivity',
+              id: target.id,
+              agentId: target.id,
+              tool: 'Discord Inbound',
+              status: `Task da Discord: ${content.slice(0, 50)}`,
+              log: `[${new Date().toLocaleTimeString()}] 💬 Ricevuto da Discord (${message.author.username}): "${content}"`
+            });
+          }
+        }
+      });
+    }).catch(daemonErr => {
+      message.channel.send(`❌ Errore interno connessione Antigravity: ${daemonErr.message}`).catch(() => {});
     });
   });
 
@@ -192,6 +262,8 @@ function initDiscordBot(onBroadcast) {
 }
 
 // Invia SOLO LA RISPOSTA FINALE nel canale specifico dell'agente (zero spam di editing o tool)
+const recentSentResponses = new Map(); // deduplica messaggi identici inviati a Discord entro 10 secondi
+
 function sendFinalAgentResponse(agentId, text) {
   if (!client || !client.isReady() || !text || !text.trim()) return;
 
@@ -202,6 +274,13 @@ function sendFinalAgentResponse(agentId, text) {
   const cleanText = text.trim();
   if (cleanText.length === 0) return;
 
+  const dedupKey = `${agentId}:${cleanText.slice(0, 100)}`;
+  const lastSentTime = recentSentResponses.get(dedupKey) || 0;
+  if (Date.now() - lastSentTime < 10000) {
+    return; // Evita duplicazione
+  }
+  recentSentResponses.set(dedupKey, Date.now());
+
   const embed = new EmbedBuilder()
     .setTitle(`💬 Risposta di ${agentEntry.name}`)
     .setDescription(cleanText.slice(0, 3950))
@@ -210,7 +289,8 @@ function sendFinalAgentResponse(agentId, text) {
     .setTimestamp();
 
   client.guilds.cache.forEach(guild => {
-    const channel = guild.channels.cache.find(c => c.isTextBased() && c.name.includes(agentEntry.channelKeyword));
+    // Trova ESATTAMENTE il canale testuale dedicato all'agente (senza inviare a canali duplicati o non pertinenti)
+    const channel = guild.channels.cache.find(c => c.isTextBased() && c.name.toLowerCase().includes(agentEntry.channelKeyword.toLowerCase()));
     if (channel) {
       channel.send({ embeds: [embed] }).catch(err => {
         console.warn(`[Discord Bot] Errore invio risposta su #${channel.name}:`, err.message);
