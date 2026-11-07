@@ -280,54 +280,68 @@ function dispatchRealTask(agent, rawInput) {
     const activeProj = routing.getTargetProject();
     const msgContent = `[Progetto Target Attivo: ${activeProj}] Messaggio operativo dalla Dashboard Web AziendaAI: ${text}`;
 
-    execFile(serverExe, ['agentapi', 'send-message', targetSubagentId, msgContent], { timeout: 15000, windowsHide: true }, (apiErr, apiStdout, apiStderr) => {
-      const finishTime = new Date();
-      const exitCode = apiErr ? 1 : 0;
-      const apiOut = (apiStdout || apiStderr || '').trim();
-      const success = exitCode === 0;
+    // Risoluzione dinamica delle variabili d'ambiente necessarie a language_server.exe
+    // quando il server viene lanciato come demone indipendente o script di background
+    getActiveDaemonConfig().then(daemonCfg => {
+      const childEnv = Object.assign({}, process.env);
+      if (daemonCfg && daemonCfg.httpPort) {
+        childEnv.ANTIGRAVITY_LS_ADDRESS = `127.0.0.1:${daemonCfg.httpPort}`;
+      }
+      if (daemonCfg && daemonCfg.csrfToken) {
+        childEnv.ANTIGRAVITY_CSRF_TOKEN = daemonCfg.csrfToken;
+      }
 
-      taskEntry.status = success ? 'dispatched' : 'failed';
-      taskEntry.exitCode = exitCode;
-      taskEntry.output = success 
-        ? `Task recapitato al subagent (${agent.name}). Elaborazione in corso su Antigravity...`
-        : `Errore inoltro: ${apiErr ? apiErr.message : 'timeout'}`;
-      saveTaskQueue(tasks);
+      execFile(serverExe, ['agentapi', 'send-message', targetSubagentId, msgContent], { timeout: 15000, windowsHide: true, env: childEnv }, (apiErr, apiStdout, apiStderr) => {
+        const finishTime = new Date();
+        const exitCode = apiErr ? 1 : 0;
+        const apiOut = (apiStdout || apiStderr || '').trim();
+        const success = exitCode === 0;
 
-      const logEnd = `[${finishTime.toLocaleTimeString()}] ${success ? '✔' : '✖'} ${taskEntry.output}`;
-      agent.logs.push(logEnd);
+        taskEntry.status = success ? 'dispatched' : 'failed';
+        taskEntry.exitCode = exitCode;
+        taskEntry.output = success 
+          ? `Task recapitato al subagent (${agent.name}). Elaborazione in corso su Antigravity...`
+          : `Errore inoltro: ${apiErr ? apiErr.message : 'timeout'}`;
+        saveTaskQueue(tasks);
 
-      // Replicazione automatica su Discord se attivo
-      sendDiscordNotification(agent.name, `**Nuovo Task Inoltrato:**\n${text}\n\n*${taskEntry.output}*`, success ? 0x2ea043 : 0xda3633);
+        const logEnd = `[${finishTime.toLocaleTimeString()}] ${success ? '✔' : '✖'} ${taskEntry.output}`;
+        agent.logs.push(logEnd);
 
-      broadcast({
-        type: 'commandResult',
-        id: agent.id,
-        agentId: agent.id,
-        taskId: taskId,
-        command: text,
-        output: taskEntry.output,
-        exitCode: exitCode,
-        time: finishTime.toLocaleTimeString()
-      });
+        // Replicazione automatica su Discord se attivo
+        sendDiscordNotification(agent.name, `**Nuovo Task Inoltrato:**\n${text}\n\n*${taskEntry.output}*`, success ? 0x2ea043 : 0xda3633);
 
-      broadcast({
-        type: 'agentActivity',
-        id: agent.id,
-        agentId: agent.id,
-        tool: 'Antigravity Chat',
-        status: success ? 'In elaborazione su Antigravity' : 'Errore recapito',
-        log: logEnd
-      });
-
-      // Mantiene l'animazione di lavoro finché il monitor live transcript non intercetta la risposta
-      setTimeout(() => {
         broadcast({
-          type: 'agentToolDone',
+          type: 'commandResult',
           id: agent.id,
           agentId: agent.id,
-          toolId: toolId
+          taskId: taskId,
+          command: text,
+          output: taskEntry.output,
+          exitCode: exitCode,
+          time: finishTime.toLocaleTimeString()
         });
-      }, 1000);
+
+        broadcast({
+          type: 'agentActivity',
+          id: agent.id,
+          agentId: agent.id,
+          tool: 'Antigravity Chat',
+          status: success ? 'In elaborazione su Antigravity' : 'Errore recapito',
+          log: logEnd
+        });
+
+        // Mantiene l'animazione di lavoro finché il monitor live transcript non intercetta la risposta
+        setTimeout(() => {
+          broadcast({
+            type: 'agentToolDone',
+            id: agent.id,
+            agentId: agent.id,
+            toolId: toolId
+          });
+        }, 1000);
+      });
+    }).catch(daemonErr => {
+      console.error('[Bridge] Errore risoluzione daemon config:', daemonErr.message);
     });
   }
 }
