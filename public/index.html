@@ -1519,6 +1519,44 @@
         enqueueDelegationWalk(fromId, toId, fromName, toName, messageText);
       }
 
+      function getCharacterScreenCoords(char) {
+        const hooks = window.__pixelAgentsTestHooks;
+        if (hooks && typeof hooks.getTileCenter === 'function') {
+          const tileX = (typeof char.x === 'number' ? char.x / 16 - 0.5 : char.tileCol);
+          const tileY = (typeof char.y === 'number' ? char.y / 16 - 0.5 : char.tileRow);
+          const pt = hooks.getTileCenter(tileX, tileY);
+          if (pt) return { x: pt.x, y: pt.y - 42 };
+        }
+        const overlayEl = document.querySelector(`[data-testid="agent-overlay"][data-agent-id="${char.id}"]`);
+        if (overlayEl) {
+          const r = overlayEl.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top - 8 };
+        }
+        return { x: window.innerWidth * 0.35, y: window.innerHeight * 0.45 };
+      }
+
+      function findNearestWalkableNextTo(office, targetChar) {
+        const dirs = [
+          { dc: 0, dr: 1 }, { dc: 0, dr: -1 },
+          { dc: 1, dr: 0 }, { dc: -1, dr: 0 },
+          { dc: 1, dr: 1 }, { dc: -1, dr: 1 },
+          { dc: 1, dr: -1 }, { dc: -1, dr: -1 },
+          { dc: 0, dr: 2 }, { dc: 2, dr: 0 }, { dc: -2, dr: 0 }
+        ];
+        const walkableSet = new Set((office.walkableTiles || []).map(t => `${t.col},${t.row}`));
+        for (const d of dirs) {
+          const c = targetChar.tileCol + d.dc;
+          const r = targetChar.tileRow + d.dr;
+          if (walkableSet.has(`${c},${r}`)) {
+            return { col: c, row: r };
+          }
+        }
+        if (typeof office.closestFreeWalkableTile === 'function') {
+          return office.closestFreeWalkableTile(targetChar.tileCol, targetChar.tileRow);
+        }
+        return { col: targetChar.tileCol, row: targetChar.tileRow + 1 };
+      }
+
       function executeAgentDelegationWalk(fromId, toId, fromName, toName, messageText, onComplete) {
         const office = window.__officeState;
         const t = I18N[appLang] || I18N.it;
@@ -1547,7 +1585,17 @@
 
         const destTile = findNearestWalkableNextTo(office, receiver);
         sender.isDelivering = true;
+
+        // Temporarily unblock sender tile to allow smooth pathfinding departure
+        let senderTileKey = null;
+        if (office.blockedTiles) {
+          senderTileKey = `${sender.tileCol},${sender.tileRow}`;
+          office.blockedTiles.delete(senderTileKey);
+        }
         office.walkToTile(sender.id, destTile.col, destTile.row);
+        if (office.blockedTiles && senderTileKey) {
+          office.blockedTiles.add(senderTileKey);
+        }
 
         const shortFrom = fromName.split(' ')[0];
         const shortTo = toName.split(' ')[0];
@@ -1600,7 +1648,10 @@
             phase = 'returning';
             parentPopupStep.textContent = tNow.returnStep(shortFrom);
             sender.isDelivering = false;
-            try { office.sendToSeat(sender.id); } catch {}
+            try {
+              const targetSeat = agentOnSofa[sender.id] ? LOUNGE_SOFA_SEATS[sender.id] : WORK_DESK_SEATS[sender.id];
+              moveAgentToSeat(sender.id, targetSeat, Boolean(agentOnSofa[sender.id]));
+            } catch {}
             activeDelegationAnim.timer = setTimeout(finishAndProceed, 2200);
           }
 
@@ -1618,6 +1669,65 @@
       let isLoungeBreakActive = false;
       let lastTeamActivityAt = Date.now();
 
+      // Funzione affidabile per spostamento a sedere (Lounge o Scrivania) con unblocking BFS caselle
+      function moveAgentToSeat(agentId, targetSeatId, onSofa) {
+        const id = Number(agentId);
+        const office = window.__officeState;
+        if (!office || !office.characters || !targetSeatId) return;
+        const ch = office.characters.get(id);
+        if (!ch) return;
+
+        const targetSeat = office.seats ? office.seats.get(targetSeatId) : null;
+        const oldSeat = (office.seats && ch.seatId) ? office.seats.get(ch.seatId) : null;
+
+        // Disassegna preventivamente i posti per evitare contese
+        if (office.seats) {
+          const dSeat = office.seats.get(WORK_DESK_SEATS[id]); if (dSeat) dSeat.assigned = false;
+          const sSeat = office.seats.get(LOUNGE_SOFA_SEATS[id]); if (sSeat) sSeat.assigned = false;
+          if (targetSeat) targetSeat.assigned = false;
+        }
+
+        // Sblocca temporaneamente le caselle del percorso BFS
+        const unblockedKeys = [];
+        if (office.blockedTiles) {
+          const startKey = `${ch.tileCol},${ch.tileRow}`;
+          if (office.blockedTiles.has(startKey)) { office.blockedTiles.delete(startKey); unblockedKeys.push(startKey); }
+          if (oldSeat) {
+            const oldKey = `${oldSeat.seatCol},${oldSeat.seatRow}`;
+            if (office.blockedTiles.has(oldKey)) { office.blockedTiles.delete(oldKey); unblockedKeys.push(oldKey); }
+          }
+          if (targetSeat) {
+            const tgtKey = `${targetSeat.seatCol},${targetSeat.seatRow}`;
+            if (office.blockedTiles.has(tgtKey)) { office.blockedTiles.delete(tgtKey); unblockedKeys.push(tgtKey); }
+          }
+        }
+
+        if (ch.seatId !== targetSeatId) {
+          if (typeof office.reassignSeat === 'function') {
+            office.reassignSeat(id, targetSeatId);
+          }
+        } else if (typeof office.sendToSeat === 'function') {
+          office.sendToSeat(id);
+        }
+
+        // Ripristina blockedTiles per non alterare le collisioni globali
+        if (office.blockedTiles && unblockedKeys.length > 0) {
+          unblockedKeys.forEach(k => office.blockedTiles.add(k));
+        }
+
+        // Configurazione stati di seduta: se sul divano niente wander e niente typing; se alla scrivania attivo per lavorare
+        if (onSofa) {
+          ch.isActive = false;
+          ch.seatTimer = 999999;
+          ch.wanderTimer = 999999;
+          if (typeof office.showWaitingBubble === 'function') {
+            setTimeout(() => { try { office.showWaitingBubble(id, false); } catch {} }, 2500);
+          }
+        } else {
+          ch.isActive = true;
+        }
+      }
+
       function ensureAgentAtWorkDesk(targetId) {
         const id = Number(targetId);
         const office = window.__officeState;
@@ -1628,17 +1738,7 @@
         const deskSeatId = WORK_DESK_SEATS[id];
         if (!deskSeatId) return;
 
-        if (ch.seatId !== deskSeatId) {
-          if (office.seats) {
-            const sDesk = office.seats.get(deskSeatId);
-            if (sDesk) sDesk.assigned = false;
-          }
-          if (typeof office.reassignSeat === 'function') {
-            office.reassignSeat(id, deskSeatId);
-          }
-        } else if (typeof office.sendToSeat === 'function') {
-          office.sendToSeat(id);
-        }
+        moveAgentToSeat(id, deskSeatId, false);
       }
 
       function updateLoungeChipUI() {
@@ -1652,7 +1752,7 @@
       function setAgentLounge(agentId, onSofa, force = false) {
         const id = Number(agentId);
         const office = window.__officeState;
-        if (!office || !office.characters || typeof office.reassignSeat !== 'function') return;
+        if (!office || !office.characters) return;
 
         // Regola 2: Chi lavora DEVE RESTARE ALLA SCRIVANIA!
         if (onSofa && agentWorking[id] && !force) {
@@ -1663,11 +1763,7 @@
           const ch = office.characters.get(id);
           const targetSeat = onSofa ? LOUNGE_SOFA_SEATS[id] : WORK_DESK_SEATS[id];
           if (ch && !ch.isDelivering && ch.seatId !== targetSeat) {
-            if (office.seats) {
-              const dSeat = office.seats.get(WORK_DESK_SEATS[id]); if (dSeat) dSeat.assigned = false;
-              const sSeat = office.seats.get(LOUNGE_SOFA_SEATS[id]); if (sSeat) sSeat.assigned = false;
-            }
-            office.reassignSeat(id, targetSeat);
+            moveAgentToSeat(id, targetSeat, onSofa);
           }
           return;
         }
@@ -1675,20 +1771,9 @@
         isLoungeBreakActive = Object.values(agentOnSofa).some(Boolean);
 
         const targetSeat = onSofa ? LOUNGE_SOFA_SEATS[id] : WORK_DESK_SEATS[id];
-        if (office.seats) {
-          const dSeat = office.seats.get(WORK_DESK_SEATS[id]); if (dSeat) dSeat.assigned = false;
-          const sSeat = office.seats.get(LOUNGE_SOFA_SEATS[id]); if (sSeat) sSeat.assigned = false;
-        }
-
         if (targetSeat) {
-          office.reassignSeat(id, targetSeat);
-          if (onSofa && typeof office.showWaitingBubble === 'function') {
-            setTimeout(() => { try { office.showWaitingBubble(id, false); } catch {} }, 2500);
-          }
+          moveAgentToSeat(id, targetSeat, onSofa);
         }
-        const t = I18N[appLang] || I18N.it;
-        const time = new Date().toLocaleTimeString();
-        appendLog(id, `[${time}] ${onSofa ? t.loungeEnterLog : t.loungeExitLog}`, onSofa ? 'perm-warn' : 'done');
         updateLoungeChipUI();
       }
 
@@ -1726,7 +1811,8 @@
       // Routine di sincronizzazione automatica Idle = Divanetti Lounge / Working = Scrivania PC
       function syncOfficeLoungeAndDesks() {
         const office = window.__officeState;
-        if (!office || !office.characters) return;
+        if (!office || !office.characters || office.characters.size === 0) return;
+        if (activeStandupTimer) return; // Se c'è lo standup in corso, non spostare nessuno!
         const now = Date.now();
 
         [10, 6, 7, 8].forEach(id => {
@@ -1835,6 +1921,7 @@
           setTimeout(() => {
             parentPopup.style.opacity = '0';
             setTimeout(() => { parentPopup.style.display = 'none'; }, 260);
+            activeStandupTimer = null;
           }, 2200);
         }, 7800);
 
