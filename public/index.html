@@ -518,6 +518,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <div class="team-bar" id="team-pills"></div>
+        <button id="kanban-toggle-btn" onclick="openKanbanModal()" style="background:#21262d; color:#58a6ff; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;">📋 <span id="label-kanban-btn">Lavagna Task</span> <span id="kanban-count-badge" style="background:#1f6feb; color:#fff; border-radius:99px; padding:1px 6px; font-size:0.68rem;">0</span></button>
         <button id="lang-toggle-btn" onclick="toggleAppLang()" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">🇮🇹 IT</button>
       </div>
     </header>
@@ -635,6 +636,69 @@
       <div id="parent-popup-step" style="font-size:0.68rem; color:#8b949e; margin-top:5px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
     </div>
 
+    <!-- INNOVAZIONE #3: MODALE LAVAGNA KANBAN LIVE (3 COLONNE) -->
+    <div id="kanban-modal-overlay" onclick="if(event.target===this) closeKanbanModal()" style="
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: rgba(1, 4, 9, 0.78);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    ">
+      <div style="
+        width: 100%;
+        max-width: 1080px;
+        max-height: 84vh;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.85);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      ">
+        <div style="padding: 14px 20px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.25rem;">📋</span>
+            <h2 id="kanban-modal-title" style="font-size: 1.05rem; color: #f0f6fc; margin: 0;">Lavagna Kanban Operativa — AziendaAI</h2>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button id="kanban-clear-btn" onclick="clearCompletedKanbanTasks()" style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; cursor:pointer;">🧹 Pulisci Completati</button>
+            <button onclick="closeKanbanModal()" style="background:#da3633; color:#fff; border:none; border-radius:6px; padding:5px 11px; font-size:0.78rem; font-weight:700; cursor:pointer;">✕</button>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px; overflow-y: auto; flex: 1;">
+          <!-- Colonna 1: In Coda -->
+          <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; display: flex; flex-direction: column; min-height: 320px; max-height: 64vh;">
+            <div style="padding: 10px 14px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+              <strong id="kanban-col-queued-title" style="font-size: 0.84rem; color: #d29922;">⏳ In Coda / Riposo</strong>
+              <span id="kanban-col-queued-count" style="background: #21262d; color: #d29922; border-radius: 99px; padding: 1px 8px; font-size: 0.72rem; font-weight: 700;">0</span>
+            </div>
+            <div id="kanban-col-queued" style="padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
+          </div>
+          <!-- Colonna 2: In Corso -->
+          <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; display: flex; flex-direction: column; min-height: 320px; max-height: 64vh;">
+            <div style="padding: 10px 14px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+              <strong id="kanban-col-active-title" style="font-size: 0.84rem; color: #58a6ff;">⚡ In Corso / Assegnati</strong>
+              <span id="kanban-col-active-count" style="background: #21262d; color: #58a6ff; border-radius: 99px; padding: 1px 8px; font-size: 0.72rem; font-weight: 700;">0</span>
+            </div>
+            <div id="kanban-col-active" style="padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
+          </div>
+          <!-- Colonna 3: Completati -->
+          <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; display: flex; flex-direction: column; min-height: 320px; max-height: 64vh;">
+            <div style="padding: 10px 14px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+              <strong id="kanban-col-done-title" style="font-size: 0.84rem; color: #3fb950;">✅ Completati</strong>
+              <span id="kanban-col-done-count" style="background: #21262d; color: #3fb950; border-radius: 99px; padding: 1px 8px; font-size: 0.72rem; font-weight: 700;">0</span>
+            </div>
+            <div id="kanban-col-done" style="padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- SCRIPT BRIDGE PER SINCRONIZZARE TOPBAR, TENDINA E MOTORE CANVAS -->
     <script>
       // =========================================================================
@@ -659,6 +723,13 @@
           chipLoungeOff: '☕ Pausa Divano',
           chipLoungeOn: '💻 Torna alle Scrivanie',
           chipStandup: '📢 Convoca Riunione',
+          kanbanBtn: 'Lavagna Task',
+          kanbanTitle: 'Lavagna Kanban Operativa — AziendaAI',
+          kanbanClear: '🧹 Pulisci Completati',
+          kanbanColQueued: '⏳ In Coda / Riposo',
+          kanbanColActive: '⚡ In Corso / Assegnati',
+          kanbanColDone: '✅ Completati',
+          kanbanEmpty: 'Nessun task in questa colonna',
           standupHeader: '📢 RIUNIONE GENERALE (STANDUP MEETING)',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri e Carlo raggiungono la scrivania di Alberto...',
           standupTalkStep: '🤝 Team riunito! Allineamento sprint in corso con Alberto (CEO)...',
@@ -689,6 +760,13 @@
           chipLoungeOff: '☕ Sofa Break',
           chipLoungeOn: '💻 Back to Desks',
           chipStandup: '📢 Call Standup Meeting',
+          kanbanBtn: 'Task Board',
+          kanbanTitle: 'Live Kanban Task Board — AziendaAI',
+          kanbanClear: '🧹 Clear Completed',
+          kanbanColQueued: '⏳ Queued / Rest',
+          kanbanColActive: '⚡ In Progress / Dispatched',
+          kanbanColDone: '✅ Completed',
+          kanbanEmpty: 'No tasks in this column',
           standupHeader: '📢 ALL-HANDS STANDUP MEETING',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri & Carlo are gathering at Alberto\'s desk...',
           standupTalkStep: '🤝 Team gathered! Sprint alignment in progress with Alberto (CEO)...',
@@ -721,6 +799,12 @@
         const c5 = document.getElementById('chip-walk'); if (c5) c5.textContent = t.chipWalk;
         const c6 = document.getElementById('chip-lounge'); if (c6) c6.textContent = isLoungeBreakActive ? t.chipLoungeOn : t.chipLoungeOff;
         const c7 = document.getElementById('chip-standup'); if (c7) c7.textContent = t.chipStandup;
+        const kbBtn = document.getElementById('label-kanban-btn'); if (kbBtn) kbBtn.textContent = t.kanbanBtn;
+        const kbTit = document.getElementById('kanban-modal-title'); if (kbTit) kbTit.textContent = t.kanbanTitle;
+        const kbClr = document.getElementById('kanban-clear-btn'); if (kbClr) kbClr.textContent = t.kanbanClear;
+        const kbC1 = document.getElementById('kanban-col-queued-title'); if (kbC1) kbC1.textContent = t.kanbanColQueued;
+        const kbC2 = document.getElementById('kanban-col-active-title'); if (kbC2) kbC2.textContent = t.kanbanColActive;
+        const kbC3 = document.getElementById('kanban-col-done-title'); if (kbC3) kbC3.textContent = t.kanbanColDone;
         const inp = document.getElementById('task-input'); if (inp) inp.placeholder = t.inputPh;
         const sBtn = document.getElementById('send-task-btn'); if (sBtn) sBtn.textContent = t.sendBtn;
         [10, 6, 7, 8].forEach(id => {
@@ -1209,6 +1293,12 @@
           if (msg.type === 'standupMeetingStarted') {
             startStandupAnimation(msg.topic, false);
           }
+
+          // Lavagna Kanban Live aggiornata dal server
+          if (msg.type === 'tasksQueueUpdated' && Array.isArray(msg.queue)) {
+            kanbanTasks = msg.queue;
+            renderKanbanBoard();
+          }
         } catch (err) {
           console.error('[Webview] Errore ws message:', err);
         }
@@ -1491,6 +1581,88 @@
         lastTeamActivityAt = Date.now();
         startStandupAnimation(null, true);
       };
+
+      // =========================================================================
+      // INNOVAZIONE #3: LAVAGNA KANBAN LIVE (3 COLONNE SINCRONIZZATE)
+      // =========================================================================
+      let kanbanTasks = [];
+
+      async function fetchKanbanTasks() {
+        try {
+          const res = await fetch('/api/tasks/queue');
+          const data = await res.json();
+          if (Array.isArray(data.queue)) {
+            kanbanTasks = data.queue;
+            renderKanbanBoard();
+          }
+        } catch {}
+      }
+
+      function renderKanbanCard(task) {
+        const agent = TEAM.find(a => Number(a.id) === Number(task.agentId)) || { name: task.agentName || 'Alberto (CEO)', avatar: '👔' };
+        const ts = task.timestamp ? new Date(task.timestamp).toLocaleTimeString() : '';
+        const statusColor = task.status === 'completed' ? '#3fb950' : (task.status === 'failed' ? '#da3633' : (task.status === 'queued_rest' ? '#d29922' : '#58a6ff'));
+        const outPreview = task.output ? String(task.output).slice(0, 140) : '';
+        return `
+          <div style="background:#0d1117; border:1px solid #30363d; border-left:3px solid ${statusColor}; border-radius:6px; padding:9px 11px; display:flex; flex-direction:column; gap:5px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:#8b949e;">
+              <strong style="color:#f0f6fc;">${agent.avatar || '🤖'} ${escapeHtml(agent.name)}</strong>
+              <span>${escapeHtml(ts)}</span>
+            </div>
+            <div style="font-size:0.8rem; color:#e6edf3; font-weight:600; word-break:break-word;">${escapeHtml(task.prompt || task.command || '')}</div>
+            ${outPreview ? `<div style="font-size:0.71rem; color:#8b949e; background:#161b22; padding:5px 7px; border-radius:4px; font-family:Consolas,monospace; white-space:pre-wrap; word-break:break-word;">${escapeHtml(outPreview)}</div>` : ''}
+          </div>
+        `;
+      }
+
+      function renderKanbanBoard() {
+        const t = I18N[appLang] || I18N.it;
+        const queued = kanbanTasks.filter(x => x.status === 'queued_rest' || x.status === 'queued' || x.status === 'pending');
+        const active = kanbanTasks.filter(x => x.status === 'running' || x.status === 'dispatched');
+        const done   = kanbanTasks.filter(x => x.status === 'completed' || x.status === 'failed').slice().reverse();
+
+        const badge = document.getElementById('kanban-count-badge');
+        if (badge) badge.textContent = String(queued.length + active.length);
+
+        const c1Count = document.getElementById('kanban-col-queued-count'); if (c1Count) c1Count.textContent = String(queued.length);
+        const c2Count = document.getElementById('kanban-col-active-count'); if (c2Count) c2Count.textContent = String(active.length);
+        const c3Count = document.getElementById('kanban-col-done-count');   if (c3Count) c3Count.textContent = String(done.length);
+
+        const emptyHtml = `<div style="color:#484f58; font-size:0.76rem; text-align:center; padding:24px 8px; font-style:italic;">${t.kanbanEmpty}</div>`;
+        const col1 = document.getElementById('kanban-col-queued'); if (col1) col1.innerHTML = queued.length ? queued.map(renderKanbanCard).join('') : emptyHtml;
+        const col2 = document.getElementById('kanban-col-active'); if (col2) col2.innerHTML = active.length ? active.map(renderKanbanCard).join('') : emptyHtml;
+        const col3 = document.getElementById('kanban-col-done');   if (col3) col3.innerHTML = done.length   ? done.map(renderKanbanCard).join('')   : emptyHtml;
+      }
+
+      window.openKanbanModal = function() {
+        const el = document.getElementById('kanban-modal-overlay');
+        if (el) {
+          el.style.display = 'flex';
+          fetchKanbanTasks();
+        }
+      };
+
+      window.closeKanbanModal = function() {
+        const el = document.getElementById('kanban-modal-overlay');
+        if (el) el.style.display = 'none';
+      };
+
+      window.clearCompletedKanbanTasks = async function() {
+        try {
+          const res = await fetch('/api/tasks/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filter: 'completed' })
+          });
+          const data = await res.json();
+          if (Array.isArray(data.queue)) {
+            kanbanTasks = data.queue;
+            renderKanbanBoard();
+          }
+        } catch {}
+      };
+
+      fetchKanbanTasks();
 
       applyLanguage();
 

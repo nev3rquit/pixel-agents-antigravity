@@ -66,6 +66,9 @@ function saveTaskQueue(tasks) {
     const tmp = QUEUE_FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(trimmed, null, 2), 'utf8');
     fs.renameSync(tmp, QUEUE_FILE);
+    try {
+      broadcast({ type: 'tasksQueueUpdated', queue: trimmed, mode: routing.getMode() });
+    } catch {}
   } catch (err) {
     console.error('[Queue] Errore salvataggio coda atomica:', err.message);
   }
@@ -1293,7 +1296,19 @@ app.get('/api/team', (req, res) => {
 });
 
 app.get('/api/tasks/queue', (req, res) => {
-  res.json({ queue: loadTaskQueue() });
+  res.json({ queue: loadTaskQueue(), mode: routing.getMode() });
+});
+
+app.post('/api/tasks/clear', (req, res) => {
+  const { filter } = req.body || {};
+  let current = loadTaskQueue();
+  if (filter === 'completed') {
+    current = current.filter(t => t.status !== 'completed' && t.status !== 'failed');
+  } else {
+    current = [];
+  }
+  saveTaskQueue(current);
+  res.json({ success: true, queue: current });
 });
 
 app.post('/api/permission/request', (req, res) => {
@@ -1529,6 +1544,20 @@ function monitorLiveAntigravity() {
                     content: finalText,
                     log: logLine
                   });
+
+                  // Segna l'ultimo task dispatched per questo agente come 'completed' con l'esito finale
+                  try {
+                    const qTasks = loadTaskQueue();
+                    for (let i = qTasks.length - 1; i >= 0; i--) {
+                      if (Number(qTasks[i].agentId) === Number(agentId) && (qTasks[i].status === 'dispatched' || qTasks[i].status === 'running')) {
+                        qTasks[i].status = 'completed';
+                        qTasks[i].exitCode = 0;
+                        qTasks[i].output = finalText.slice(0, 600);
+                        saveTaskQueue(qTasks);
+                        break;
+                      }
+                    }
+                  } catch {}
 
                   // Se un collega (Luigi, Gabri, Carlo) ha completato il suo lavoro o menziona un altro collega, cammina fisicamente verso di lui (o verso Alberto CEO) per consegnare il risultato!
                   if (agentId !== 10) {
