@@ -833,6 +833,13 @@ function sendOfficeInitProtocol(ws) {
   }
 
   // 6. Sincronizzazione stato Kanban & Lounge Break iniziale per il client
+  // All'avvio e in sendOfficeInitProtocol, isLoungeBreakActive deve essere resettato a false
+  // (salvo routing.isResting() === true), altrimenti la dashboard apre sempre con tutti sul divano.
+  if (!routing.isResting()) {
+    isLoungeBreakActive = false;
+  }
+  const loungeActive = routing.isResting() ? true : isLoungeBreakActive;
+
   ws.send(JSON.stringify({
     type: 'tasksQueueUpdated',
     queue: loadTaskQueue(),
@@ -840,7 +847,7 @@ function sendOfficeInitProtocol(ws) {
   }));
   ws.send(JSON.stringify({
     type: 'loungeBreakState',
-    active: isLoungeBreakActive || routing.isResting(),
+    active: loungeActive,
     reason: 'initial_sync'
   }));
 }
@@ -1527,6 +1534,7 @@ app.post('/api/log', (req, res) => {
 
 // Monitor log transcript da Antigravity per live streaming e animazioni
 const filePositions = new Map();
+const delegationActiveUntil = new Map();
 const SUBAGENT_MAP = routing.allSessionsMap();
 
 function formatToolDesc(call) {
@@ -1622,6 +1630,32 @@ function monitorLiveAntigravity() {
             try {
               const parsed = JSON.parse(line.trim());
               const targetAgent = TEAM.find(a => a.id === agentId) || TEAM[0];
+
+              // Intercetta messaggi ricevuti da un collega ([Message] sender=<uuid>)
+              const contentStr = typeof parsed.content === 'string' ? parsed.content : '';
+              if (contentStr.includes('sender=')) {
+                const senderMatch = /sender=([a-f0-9\-]+)/i.exec(contentStr);
+                if (senderMatch) {
+                  const senderUuid = senderMatch[1];
+                  const allMap = routing.allSessionsMap();
+                  const fromAgentId = allMap[senderUuid];
+                  if (fromAgentId && fromAgentId !== agentId) {
+                    const fromAgent = TEAM.find(a => a.id === fromAgentId);
+                    const contentMatch = /content=([\s\S]*?)(?:<\/SYSTEM_MESSAGE>|$)/i.exec(contentStr);
+                    const rawMsg = contentMatch ? contentMatch[1].trim() : contentStr;
+                    delegationActiveUntil.set(fromAgentId, Date.now() + 8000);
+                    broadcast({
+                      type: 'agentDelegation',
+                      fromAgentId: fromAgentId,
+                      toAgentId: agentId,
+                      fromName: fromAgent ? fromAgent.name : `Agente ${fromAgentId}`,
+                      toName: targetAgent.name,
+                      message: rawMsg
+                    });
+                  }
+                }
+              }
+
               if (parsed.type === 'PLANNER_RESPONSE' && parsed.tool_calls) {
                 for (const call of parsed.tool_calls) {
                   const statusDesc = formatToolDesc(call);
@@ -1648,7 +1682,7 @@ function monitorLiveAntigravity() {
                     log: logLine
                   });
 
-                  // Rileva quando un agente (es. Alberto CEO) delega/comunica con un altro collega tramite send_message!
+                  // Rileva quando un agente delega/comunica con un altro collega tramite send_message!
                   if (call.name === 'send_message' && call.args) {
                     const rawRecip = String(call.args.Recipient || '').replace(/^"|"$/g, '').trim();
                     const rawMsg = String(call.args.Message || '').replace(/^"|"$/g, '').trim();
@@ -1656,6 +1690,7 @@ function monitorLiveAntigravity() {
                     const toAgentId = allMap[rawRecip];
                     if (toAgentId && toAgentId !== agentId) {
                       const destAgent = TEAM.find(a => a.id === toAgentId);
+                      delegationActiveUntil.set(agentId, Date.now() + 8000);
                       broadcast({
                         type: 'agentDelegation',
                         fromAgentId: agentId,
@@ -1668,8 +1703,20 @@ function monitorLiveAntigravity() {
                   }
                 }
               } else if (parsed.type === 'PLANNER_RESPONSE') {
-                broadcast({ type: 'agentToolsClear', id: agentId, agentId: agentId });
-                broadcast({ type: 'agentStatus', id: agentId, agentId: agentId, status: 'waiting' });
+                // Non emettere agentToolsClear se l'agente sta eseguendo o ha appena eseguito send_message per non interrompere bruscamente la camminata
+                const until = delegationActiveUntil.get(agentId) || 0;
+                const isDelivering = Date.now() < until;
+                if (!isDelivering) {
+                  broadcast({ type: 'agentToolsClear', id: agentId, agentId: agentId });
+                  broadcast({ type: 'agentStatus', id: agentId, agentId: agentId, status: 'waiting' });
+                } else {
+                  // Differito: pulisce i tool solo dopo che l'animazione di consegna sul canvas è completata
+                  const delay = Math.max(1500, until - Date.now());
+                  setTimeout(() => {
+                    broadcast({ type: 'agentToolsClear', id: agentId, agentId: agentId });
+                    broadcast({ type: 'agentStatus', id: agentId, agentId: agentId, status: 'waiting' });
+                  }, delay);
+                }
 
                 // Quando l'agente termina e ha generato un messaggio testuale finale, invialo sul canale Discord e via WS alla Dashboard!
                 if (parsed.content && typeof parsed.content === 'string' && parsed.content.trim().length > 0) {

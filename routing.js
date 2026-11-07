@@ -18,6 +18,7 @@ const DEFAULT_ALTEREGO = {
 
 let PRIMARY = { ...DEFAULT_PRIMARY };
 let ALTEREGO = { ...DEFAULT_ALTEREGO };
+let PARENT_SESSION = null;
 
 try {
   const cfgPath = path.join(__dirname, 'agents.config.json');
@@ -28,6 +29,9 @@ try {
     }
     if (cfg.alterego) {
       for (const [k, v] of Object.entries(cfg.alterego)) if (v) ALTEREGO[Number(k)] = v;
+    }
+    if (cfg.parent) {
+      PARENT_SESSION = String(cfg.parent).trim();
     }
   }
 } catch (_) {}
@@ -144,6 +148,9 @@ function resolveSubagent(agentId) {
 
 function allSessionsMap() {
   const m = {};
+  if (PARENT_SESSION) {
+    m[PARENT_SESSION] = 10; // Alias sessione Alberto (CEO / Parent Agent)
+  }
   for (const [a, s] of Object.entries(PRIMARY)) m[s] = Number(a);
   for (const [a, s] of Object.entries(ALTEREGO)) m[s] = Number(a);
   return m;

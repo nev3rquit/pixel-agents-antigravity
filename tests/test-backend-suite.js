@@ -141,8 +141,13 @@ async function runTests() {
       }, 800);
 
       setTimeout(() => {
+        // Reset finale obbligatorio: riporta la lounge break a false per non lasciare lo stato alterato all'avvio dashboard!
+        ws.send(JSON.stringify({ type: 'toggleLoungeBreak', active: false }));
+      }, 1000);
+
+      setTimeout(() => {
         ws.close();
-      }, 1200);
+      }, 1300);
     });
 
     ws.on('message', data => {

@@ -968,6 +968,19 @@
       const agentWorking = { 10: false, 6: false, 7: false, 8: false };
       const agentLastActiveAt = { 10: Date.now(), 6: Date.now(), 7: Date.now(), 8: Date.now() };
 
+      const WORK_DESK_SEATS = {
+        10: 'f-1773356768339-eo6u', // Alberto (CEO)
+        6:  'f-1773354881902-9m50', // Luigi (Backend)
+        7:  'f-1773354879805-px9b', // Gabri (Frontend)
+        8:  'f-1773354880309-yphd'  // Carlo (QA)
+      };
+      const LOUNGE_SOFA_SEATS = {
+        10: 'f-1773354668333-lo7w', // Divano Nord (fronte tavolino caffè)
+        6:  'f-1773354664329-hxsh', // Divano Ovest
+        7:  'f-1773354670818-r1q2', // Divano Est
+        8:  'f-1773354665989-zgrw'  // Divano Sud
+      };
+
       const teamPills = document.getElementById('team-pills');
       const drawerName = document.getElementById('drawer-agent-name');
       const drawerRole = document.getElementById('drawer-agent-role');
@@ -1237,7 +1250,8 @@
         if (!text) return;
         agentWorking[selectedId] = true;
         agentLastActiveAt[selectedId] = Date.now();
-        setAgentLounge(selectedId, false, false);
+        setAgentLounge(selectedId, false, true);
+        ensureAgentAtWorkDesk(selectedId);
         const time = new Date().toLocaleTimeString();
         appendLog(selectedId, `[${time}] Task inoltrato: "${text}"`, 'task');
         agentStatuses[selectedId] = `⚡ Task: ${text}`;
@@ -1366,9 +1380,8 @@
             const targetId = Number(msg.id || msg.agentId || 10);
             agentWorking[targetId] = true;
             agentLastActiveAt[targetId] = Date.now();
-            if (agentOnSofa[targetId]) {
-              setAgentLounge(targetId, false);
-            }
+            setAgentLounge(targetId, false, true);
+            ensureAgentAtWorkDesk(targetId);
             const desc = msg.status || (msg.toolName ? ('Eseguo: ' + msg.toolName) : 'Comando in esecuzione');
             agentStatuses[targetId] = `⚡ ${desc}`;
             updateStatusDisplay(targetId);
@@ -1380,9 +1393,8 @@
             const targetId = Number(msg.agentId || msg.id || 10);
             agentWorking[targetId] = true;
             agentLastActiveAt[targetId] = Date.now();
-            if (agentOnSofa[targetId]) {
-              setAgentLounge(targetId, false);
-            }
+            setAgentLounge(targetId, false, true);
+            ensureAgentAtWorkDesk(targetId);
             if (msg.status) {
               agentStatuses[targetId] = `⚡ ${msg.status}`;
               updateStatusDisplay(targetId);
@@ -1418,8 +1430,9 @@
             agentWorking[tId] = true;
             agentLastActiveAt[fId] = Date.now();
             agentLastActiveAt[tId] = Date.now();
-            if (agentOnSofa[fId]) setAgentLounge(fId, false);
-            if (agentOnSofa[tId]) setAgentLounge(tId, false);
+            setAgentLounge(fId, false, true);
+            setAgentLounge(tId, false, true);
+            ensureAgentAtWorkDesk(tId);
 
             playRetroSound(Number(msg.toAgentId) === 10 ? 'complete' : 'delegation');
             triggerAgentDelegationWalk(
@@ -1478,46 +1491,31 @@
       const parentPopupText = document.getElementById('parent-popup-text');
       const parentPopupStep = document.getElementById('parent-popup-step');
       let activeDelegationAnim = null;
+      const delegationQueue = [];
+      let isProcessingDelegation = false;
 
-      function getCharacterScreenCoords(char) {
-        const hooks = window.__pixelAgentsTestHooks;
-        if (hooks && typeof hooks.getTileCenter === 'function') {
-          const tileX = (typeof char.x === 'number' ? char.x / 16 - 0.5 : char.tileCol);
-          const tileY = (typeof char.y === 'number' ? char.y / 16 - 0.5 : char.tileRow);
-          const pt = hooks.getTileCenter(tileX, tileY);
-          if (pt) return { x: pt.x, y: pt.y - 42 };
-        }
-        const overlayEl = document.querySelector(`[data-testid="agent-overlay"][data-agent-id="${char.id}"]`);
-        if (overlayEl) {
-          const r = overlayEl.getBoundingClientRect();
-          return { x: r.left + r.width / 2, y: r.top - 8 };
-        }
-        return { x: window.innerWidth * 0.35, y: window.innerHeight * 0.45 };
+      function enqueueDelegationWalk(fromId, toId, fromName, toName, messageText) {
+        delegationQueue.push({ fromId, toId, fromName, toName, messageText });
+        processNextDelegation();
       }
 
-      function findNearestWalkableNextTo(office, targetChar) {
-        const dirs = [
-          { dc: 0, dr: 1 }, { dc: 0, dr: -1 },
-          { dc: 1, dr: 0 }, { dc: -1, dr: 0 },
-          { dc: 1, dr: 1 }, { dc: -1, dr: 1 },
-          { dc: 1, dr: -1 }, { dc: -1, dr: -1 },
-          { dc: 0, dr: 2 }, { dc: 2, dr: 0 }, { dc: -2, dr: 0 }
-        ];
-        const walkableSet = new Set((office.walkableTiles || []).map(t => `${t.col},${t.row}`));
-        for (const d of dirs) {
-          const c = targetChar.tileCol + d.dc;
-          const r = targetChar.tileRow + d.dr;
-          if (walkableSet.has(`${c},${r}`)) {
-            return { col: c, row: r };
-          }
-        }
-        if (typeof office.closestFreeWalkableTile === 'function') {
-          return office.closestFreeWalkableTile(targetChar.tileCol, targetChar.tileRow);
-        }
-        return { col: targetChar.tileCol, row: targetChar.tileRow + 1 };
+      function processNextDelegation() {
+        if (isProcessingDelegation) return;
+        if (delegationQueue.length === 0) return;
+
+        isProcessingDelegation = true;
+        const item = delegationQueue.shift();
+        executeAgentDelegationWalk(item.fromId, item.toId, item.fromName, item.toName, item.messageText, () => {
+          isProcessingDelegation = false;
+          setTimeout(processNextDelegation, 250);
+        });
       }
 
       function triggerAgentDelegationWalk(fromId, toId, fromName, toName, messageText) {
+        enqueueDelegationWalk(fromId, toId, fromName, toName, messageText);
+      }
+
+      function executeAgentDelegationWalk(fromId, toId, fromName, toName, messageText, onComplete) {
         const office = window.__officeState;
         const t = I18N[appLang] || I18N.it;
         const cleanMsg = String(messageText || '').replace(/^Messaggio operativo.*?:\s*/i, '').trim();
@@ -1527,10 +1525,16 @@
         appendLog(fromId, `[${time}] ${t.walkLog(toName, shortMsg)}`, 'task');
         appendLog(toId, `[${time}] 📨 Message from Parent Agent (${fromName}): "${shortMsg}"`, 'activity');
 
-        if (!office || !office.characters) return;
+        if (!office || !office.characters) {
+          if (typeof onComplete === 'function') onComplete();
+          return;
+        }
         const sender = office.characters.get(Number(fromId));
         const receiver = office.characters.get(Number(toId));
-        if (!sender || !receiver) return;
+        if (!sender || !receiver) {
+          if (typeof onComplete === 'function') onComplete();
+          return;
+        }
 
         if (activeDelegationAnim) {
           cancelAnimationFrame(activeDelegationAnim.raf);
@@ -1557,8 +1561,25 @@
 
         let phase = 'walking_to_target'; // 'walking_to_target' -> 'talking' -> 'returning'
         let talkStart = 0;
+        let walkStart = Date.now();
+        let isDone = false;
+
+        function finishAndProceed() {
+          if (isDone) return;
+          isDone = true;
+          parentPopup.style.opacity = '0';
+          setTimeout(() => { parentPopup.style.display = 'none'; }, 260);
+          if (activeDelegationAnim) {
+            if (activeDelegationAnim.raf) cancelAnimationFrame(activeDelegationAnim.raf);
+            if (activeDelegationAnim.timer) clearTimeout(activeDelegationAnim.timer);
+            activeDelegationAnim = null;
+          }
+          if (sender) sender.isDelivering = false;
+          if (typeof onComplete === 'function') onComplete();
+        }
 
         function stepAnim() {
+          if (isDone) return;
           const tNow = I18N[appLang] || I18N.it;
           const anchorChar = phase === 'talking' ? receiver : sender;
           const pos = getCharacterScreenCoords(anchorChar);
@@ -1566,25 +1587,20 @@
           parentPopup.style.top = `${Math.max(80, pos.y)}px`;
 
           const dist = Math.abs(sender.tileCol - destTile.col) + Math.abs(sender.tileRow - destTile.row);
-          if (phase === 'walking_to_target' && (sender.path.length === 0 || dist === 0)) {
+          if (phase === 'walking_to_target' && (sender.path.length === 0 || dist === 0 || (Date.now() - walkStart > 6000))) {
             phase = 'talking';
             talkStart = Date.now();
             parentPopupStep.textContent = tNow.talkStep(shortFrom, shortTo);
-            office.showWaitingBubble(receiver.id, false);
+            try { office.showWaitingBubble(receiver.id, false); } catch {}
           } else if (phase === 'talking' && Date.now() - talkStart > 4500) {
             phase = 'returning';
             parentPopupStep.textContent = tNow.returnStep(shortFrom);
             sender.isDelivering = false;
-            office.sendToSeat(sender.id);
-            activeDelegationAnim.timer = setTimeout(() => {
-              parentPopup.style.opacity = '0';
-              setTimeout(() => { parentPopup.style.display = 'none'; }, 260);
-              cancelAnimationFrame(activeDelegationAnim.raf);
-              activeDelegationAnim = null;
-            }, 2200);
+            try { office.sendToSeat(sender.id); } catch {}
+            activeDelegationAnim.timer = setTimeout(finishAndProceed, 2200);
           }
 
-          if (activeDelegationAnim) {
+          if (!isDone) {
             activeDelegationAnim.raf = requestAnimationFrame(stepAnim);
           }
         }
@@ -1595,20 +1611,31 @@
       // =========================================================================
       // INNOVAZIONE #1: PAUSA CAFFÈ / DIVANO FISICA IN SALA RELAX (REST & IDLE)
       // =========================================================================
-      const WORK_DESK_SEATS = {
-        10: 'f-1773356768339-eo6u', // Alberto (CEO)
-        6:  'f-1773354881902-9m50', // Luigi (Backend)
-        7:  'f-1773354879805-px9b', // Gabri (Frontend)
-        8:  'f-1773354880309-yphd'  // Carlo (QA)
-      };
-      const LOUNGE_SOFA_SEATS = {
-        10: 'f-1773354668333-lo7w', // Divano Nord (fronte tavolino caffè)
-        6:  'f-1773354664329-hxsh', // Divano Ovest
-        7:  'f-1773354670818-r1q2', // Divano Est
-        8:  'f-1773354665989-zgrw'  // Divano Sud
-      };
       let isLoungeBreakActive = false;
       let lastTeamActivityAt = Date.now();
+
+      function ensureAgentAtWorkDesk(targetId) {
+        const id = Number(targetId);
+        const office = window.__officeState;
+        if (!office || !office.characters) return;
+        const ch = office.characters.get(id);
+        if (!ch || ch.isDelivering) return;
+
+        const deskSeatId = WORK_DESK_SEATS[id];
+        if (!deskSeatId) return;
+
+        if (ch.seatId !== deskSeatId) {
+          if (office.seats) {
+            const sDesk = office.seats.get(deskSeatId);
+            if (sDesk) sDesk.assigned = false;
+          }
+          if (typeof office.reassignSeat === 'function') {
+            office.reassignSeat(id, deskSeatId);
+          }
+        } else if (typeof office.sendToSeat === 'function') {
+          office.sendToSeat(id);
+        }
+      }
 
       function updateLoungeChipUI() {
         const t = I18N[appLang] || I18N.it;
@@ -1712,6 +1739,8 @@
           : 'Sprint Alignment: Backend status (Luigi), Canvas UI (Gabri) & Security Audit (Carlo).');
         const time = new Date().toLocaleTimeString();
 
+        delegationQueue.length = 0;
+        isProcessingDelegation = false;
         if (activeStandupTimer) clearTimeout(activeStandupTimer);
         if (activeDelegationAnim) {
           cancelAnimationFrame(activeDelegationAnim.raf);
