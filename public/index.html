@@ -618,8 +618,8 @@
       display: none;
       position: fixed;
       z-index: 9999;
-      max-width: 640px;
-      min-width: 360px;
+      max-width: 680px;
+      min-width: 380px;
       background: rgba(13, 17, 23, 0.98);
       border: 2px solid #58a6ff;
       border-radius: 14px;
@@ -632,11 +632,11 @@
       transition: opacity 0.25s ease;
     ">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; border-bottom:1px solid #30363d; padding-bottom:8px;">
-        <span style="font-size:0.86rem; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:#58a6ff;">📨 Message from Parent Agent</span>
-        <span id="parent-popup-badge" style="font-size:0.82rem; background:#1f6feb; color:#fff; padding:4px 12px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
+        <span id="parent-popup-title" style="font-size:0.92rem; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:#58a6ff;">📨 Message from Parent Agent</span>
+        <span id="parent-popup-badge" style="font-size:0.84rem; background:#1f6feb; color:#fff; padding:4px 12px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
       </div>
-      <div id="parent-popup-text" style="font-size:1.06rem; line-height:1.6; color:#ffffff; font-weight:500; word-break:break-word; max-height:260px; overflow-y:auto;"></div>
-      <div id="parent-popup-step" style="font-size:0.84rem; color:#8b949e; margin-top:10px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
+      <div id="parent-popup-text" style="font-size:1.12rem; line-height:1.6; color:#ffffff; font-weight:500; word-break:break-word; max-height:280px; overflow-y:auto;"></div>
+      <div id="parent-popup-step" style="font-size:0.86rem; color:#8b949e; margin-top:10px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
     </div>
 
     <!-- INNOVAZIONE #3: MODALE LAVAGNA KANBAN LIVE (3 COLONNE) -->
@@ -1394,7 +1394,6 @@
             const desc = msg.status || (msg.toolName ? ('Eseguo: ' + msg.toolName) : 'Comando in esecuzione');
             agentStatuses[targetId] = `⚡ ${desc}`;
             updateStatusDisplay(targetId);
-            appendLog(targetId, `[${time}] ⚡ ${desc}`, 'activity');
           }
 
           // Attività o log dettagliato
@@ -1428,6 +1427,15 @@
             agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
             updateStatusDisplay(targetId);
             appendLog(targetId, `[${time}] ✔ Operazione completata. In attesa di nuove istruzioni.`, 'done');
+            const office = window.__officeState;
+            if (office && office.characters) {
+              const ch = office.characters.get(targetId);
+              if (ch) ch.isActive = false;
+              if (typeof office.setAgentActive === 'function') office.setAgentActive(targetId, false);
+              if (office.agentTools && office.agentTools[targetId]) {
+                office.agentTools[targetId].forEach(t => { t.done = true; });
+              }
+            }
           }
 
           if (msg.type === 'agentToolsClear') {
@@ -1436,6 +1444,15 @@
             agentLastActiveAt[targetId] = Date.now() - 5000;
             agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
             updateStatusDisplay(targetId);
+            const office = window.__officeState;
+            if (office && office.characters) {
+              const ch = office.characters.get(targetId);
+              if (ch) ch.isActive = false;
+              if (typeof office.setAgentActive === 'function') office.setAgentActive(targetId, false);
+              if (office.agentTools && office.agentTools[targetId]) {
+                office.agentTools[targetId].forEach(t => { t.done = true; });
+              }
+            }
           }
 
           // Instradamento fisico: un agente (es. Alberto CEO) cammina verso un sottoposto e mostra il popup "Message from Parent Agent"
@@ -1517,6 +1534,7 @@
       // INSTRADAMENTO FISICO AGENTI & POPUP "MESSAGE FROM PARENT AGENT"
       // =========================================================================
       const parentPopup = document.getElementById('parent-message-popup');
+      const parentPopupTitle = document.getElementById('parent-popup-title');
       const parentPopupBadge = document.getElementById('parent-popup-badge');
       const parentPopupText = document.getElementById('parent-popup-text');
       const parentPopupStep = document.getElementById('parent-popup-step');
@@ -1641,9 +1659,8 @@
 
         const shortFrom = fromName.split(' ')[0];
         const shortTo = toName.split(' ')[0];
-        const popupTitleEl = parentPopup.querySelector('span');
-        if (popupTitleEl) {
-          popupTitleEl.textContent = Number(fromId) === 10
+        if (parentPopupTitle) {
+          parentPopupTitle.textContent = Number(fromId) === 10
             ? '📋 DELEGA OPERATIVA CEO'
             : (Number(toId) === 10 ? '📊 REPORT OPERATIVO PER IL CEO' : '🤝 COLLABORAZIONE TEAM');
         }
@@ -1785,8 +1802,15 @@
           if (typeof office.reassignSeat === 'function') {
             office.reassignSeat(id, targetSeatId);
           }
+          if (typeof office.sendToSeat === 'function') {
+            office.sendToSeat(id);
+          } else if (targetSeat && typeof office.walkToTile === 'function') {
+            office.walkToTile(id, targetSeat.seatCol, targetSeat.seatRow);
+          }
         } else if (typeof office.sendToSeat === 'function') {
           office.sendToSeat(id);
+        } else if (targetSeat && typeof office.walkToTile === 'function') {
+          office.walkToTile(id, targetSeat.seatCol, targetSeat.seatRow);
         }
 
         // Configurazione stati di seduta: se sul divano niente wander e niente typing; se alla scrivania attivo per lavorare
@@ -1794,8 +1818,17 @@
           ch.isActive = false;
           ch.seatTimer = 999999;
           ch.wanderTimer = 999999;
+          if (typeof office.setAgentActive === 'function') {
+            office.setAgentActive(id, false);
+          }
+          if (office.agentTools && office.agentTools[id]) {
+            office.agentTools[id].forEach(t => { t.done = true; });
+          }
         } else {
           ch.isActive = true;
+          if (typeof office.setAgentActive === 'function') {
+            office.setAgentActive(id, true);
+          }
         }
       }
 

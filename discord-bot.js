@@ -140,8 +140,6 @@ function initDiscordBot(onBroadcast) {
       target = SUBAGENT_CHANNELS['gabri-frontend'];
     } else if (channelName.includes('carlo') || channelName.includes('qa') || channelName.includes('security')) {
       target = SUBAGENT_CHANNELS['carlo-qa'];
-    } else if (channelName.includes('sala-operativa') || channelName.includes('generale')) {
-      target = SUBAGENT_CHANNELS['alberto-ceo'];
     }
 
     const content = message.content.trim();
