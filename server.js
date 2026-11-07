@@ -1009,6 +1009,7 @@ async function getLiveQuotaAndModels() {
       }
       try { sendDiscordAnnouncement(ann.t, ann.c); } catch {}
       broadcast({ type: 'agentModeChange', mode: tr.mode, message: ann.t });
+      broadcast({ type: 'loungeBreakState', active: tr.mode === 'rest', reason: tr.mode === 'rest' ? 'quota_rest' : 'quota_resumed' });
     }
     const subagentsList = [];
     for (const [sid, agentId] of Object.entries(SUBAGENT_MAP)) {
@@ -1170,7 +1171,13 @@ wss.on('connection', (ws, req) => {
         const agent = TEAM.find(a => a.id === targetId) || TEAM[0];
         
         // Inoltra l'istruzione reale tramite Command Bridge Reale
+        if (!routing.isResting()) {
+          broadcast({ type: 'loungeBreakState', active: false, reason: 'task_dispatched' });
+        }
         dispatchRealTask(agent, text);
+      } else if (data.type === 'toggleLoungeBreak') {
+        const active = Boolean(data.active);
+        broadcast({ type: 'loungeBreakState', active, reason: 'manual_toggle' });
       } else if (data.type === 'requestPermission') {
         const targetId = Number(data.agentId || data.id) || 10;
         const requestId = data.requestId || `perm_${Date.now()}`;

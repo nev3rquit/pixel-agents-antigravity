@@ -598,6 +598,7 @@
           <button class="quick-chip" id="chip-audit" onclick="quickTask(appLang === 'it' ? 'Avvia test di sicurezza e QA' : 'Run security and QA audit')">🛡️ Audit Sicurezza</button>
           <button class="quick-chip" id="chip-perm" style="border-color:#d29922; color:#e3b341;" onclick="simulatePermissionRequest()">⚠️ Test Autorizzazione</button>
           <button class="quick-chip" id="chip-walk" style="border-color:#58a6ff; color:#58a6ff;" onclick="simulateDelegationWalk()">🚶‍♂️ Test Delegacy Alberto→Luigi</button>
+          <button class="quick-chip" id="chip-lounge" style="border-color:#bc8cff; color:#bc8cff;" onclick="toggleLoungeBreak()">☕ Pausa Divano</button>
         </div>
 
         <div class="command-bar">
@@ -654,6 +655,10 @@
           chipAudit: '🛡️ Audit Sicurezza',
           chipPerm: '⚠️ Test Autorizzazione',
           chipWalk: '🚶‍♂️ Test Delegacy Alberto→Luigi',
+          chipLoungeOff: '☕ Pausa Divano',
+          chipLoungeOn: '💻 Torna alle Scrivanie',
+          loungeEnterLog: '☕ Pausa Caffè / Riposo: si sposta sui divani della sala relax...',
+          loungeExitLog: '💻 Fine pausa: rientro immediato alla scrivania operativa!',
           inputPh: "Assegna un'istruzione a questo agente...",
           sendBtn: 'Invia Task',
           walkLog: (to, msg) => `🚶‍♂️ Cammina verso ${to} per assegnare: "${msg}"`,
@@ -675,6 +680,10 @@
           chipAudit: '🛡️ Security Audit',
           chipPerm: '⚠️ Test Permission',
           chipWalk: '🚶‍♂️ Test Delegation Alberto→Luigi',
+          chipLoungeOff: '☕ Sofa Break',
+          chipLoungeOn: '💻 Back to Desks',
+          loungeEnterLog: '☕ Coffee / Rest Break: walking to the lounge sofas...',
+          loungeExitLog: '💻 Break over: returning to workstation desk!',
           inputPh: 'Assign a task or instruction to this agent...',
           sendBtn: 'Send Task',
           walkLog: (to, msg) => `🚶‍♂️ Walking to ${to} to deliver: "${msg}"`,
@@ -699,6 +708,7 @@
         const c3 = document.getElementById('chip-audit'); if (c3) c3.textContent = t.chipAudit;
         const c4 = document.getElementById('chip-perm'); if (c4) c4.textContent = t.chipPerm;
         const c5 = document.getElementById('chip-walk'); if (c5) c5.textContent = t.chipWalk;
+        const c6 = document.getElementById('chip-lounge'); if (c6) c6.textContent = isLoungeBreakActive ? t.chipLoungeOn : t.chipLoungeOff;
         const inp = document.getElementById('task-input'); if (inp) inp.placeholder = t.inputPh;
         const sBtn = document.getElementById('send-task-btn'); if (sBtn) sBtn.textContent = t.sendBtn;
         [10, 6, 7, 8].forEach(id => {
@@ -1165,6 +1175,7 @@
 
           // Instradamento fisico: un agente (es. Alberto CEO) cammina verso un sottoposto e mostra il popup "Message from Parent Agent"
           if (msg.type === 'agentDelegation') {
+            if (isLoungeBreakActive) setLoungeBreak(false, false);
             triggerAgentDelegationWalk(
               Number(msg.fromAgentId || 10),
               Number(msg.toAgentId || 6),
@@ -1172,6 +1183,14 @@
               msg.toName || 'Luigi (Backend)',
               msg.message || 'Nuovo task operativo assegnato.'
             );
+          }
+
+          // Pausa Caffè / Divano in Sala Relax (Automatica su Rest / Inattività o Manuale)
+          if (msg.type === 'loungeBreakState') {
+            setLoungeBreak(Boolean(msg.active), false);
+          }
+          if (msg.type === 'agentModeChange' && msg.mode) {
+            setLoungeBreak(msg.mode === 'rest', false);
           }
         } catch (err) {
           console.error('[Webview] Errore ws message:', err);
@@ -1299,6 +1318,73 @@
 
         activeDelegationAnim = { raf: requestAnimationFrame(stepAnim), timer: null };
       }
+
+      // =========================================================================
+      // INNOVAZIONE #1: PAUSA CAFFÈ / DIVANO FISICA IN SALA RELAX (REST & IDLE)
+      // =========================================================================
+      const WORK_DESK_SEATS = {
+        10: 'f-1773356768339-eo6u', // Alberto (CEO)
+        6:  'f-1773354881902-9m50', // Luigi (Backend)
+        7:  'f-1773354879805-px9b', // Gabri (Frontend)
+        8:  'f-1773354880309-yphd'  // Carlo (QA)
+      };
+      const LOUNGE_SOFA_SEATS = {
+        10: 'f-1773354668333-lo7w', // Divano Nord (fronte tavolino caffè)
+        6:  'f-1773354664329-hxsh', // Divano Ovest
+        7:  'f-1773354670818-r1q2', // Divano Est
+        8:  'f-1773354665989-zgrw'  // Divano Sud
+      };
+      let isLoungeBreakActive = false;
+      let lastTeamActivityAt = Date.now();
+
+      function setLoungeBreak(active, broadcastToServer = true) {
+        const office = window.__officeState;
+        if (!office || !office.characters || typeof office.reassignSeat !== 'function') return;
+        if (isLoungeBreakActive === active) return;
+        isLoungeBreakActive = active;
+
+        const t = I18N[appLang] || I18N.it;
+        const time = new Date().toLocaleTimeString();
+        const seatMap = active ? LOUNGE_SOFA_SEATS : WORK_DESK_SEATS;
+
+        // Libera prima i flag assigned sui sedili coinvolti per permettere reassignSeat pulito
+        if (office.seats) {
+          for (const sid of Object.values(WORK_DESK_SEATS)) {
+            const s = office.seats.get(sid); if (s) s.assigned = false;
+          }
+          for (const sid of Object.values(LOUNGE_SOFA_SEATS)) {
+            const s = office.seats.get(sid); if (s) s.assigned = false;
+          }
+        }
+
+        TEAM.forEach(a => {
+          const targetSeat = seatMap[a.id];
+          if (targetSeat) {
+            office.reassignSeat(a.id, targetSeat);
+            if (active && typeof office.showWaitingBubble === 'function') {
+              setTimeout(() => { try { office.showWaitingBubble(a.id, false); } catch {} }, 2500);
+            }
+          }
+          appendLog(a.id, `[${time}] ${active ? t.loungeEnterLog : t.loungeExitLog}`, active ? 'perm-warn' : 'done');
+        });
+
+        applyLanguage();
+        if (broadcastToServer && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'toggleLoungeBreak', active }));
+        }
+      }
+
+      window.toggleLoungeBreak = function() {
+        lastTeamActivityAt = Date.now();
+        setLoungeBreak(!isLoungeBreakActive, true);
+      };
+
+      // Timer inattività automatica (>5 minuti senza task -> vanno a prendere il caffè sui divani)
+      setInterval(() => {
+        if (!isLoungeBreakActive && (Date.now() - lastTeamActivityAt > 5 * 60 * 1000)) {
+          setLoungeBreak(true, false);
+        }
+      }, 15000);
 
       applyLanguage();
 
