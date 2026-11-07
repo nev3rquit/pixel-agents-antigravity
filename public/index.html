@@ -1446,7 +1446,6 @@
 
           // Pausa Caffè / Divano in Sala Relax (Automatica su Rest / Inattività o Manuale)
           if (msg.type === 'loungeBreakState') {
-            playRetroSound('lounge');
             if (msg.agentLoungeStates && typeof msg.agentLoungeStates === 'object') {
               for (const [aId, onSofa] of Object.entries(msg.agentLoungeStates)) {
                 setAgentLounge(Number(aId), Boolean(onSofa), Boolean(onSofa));
@@ -1669,6 +1668,18 @@
       let isLoungeBreakActive = false;
       let lastTeamActivityAt = Date.now();
 
+      // Rimuove in modo permanente dalle collisioni (blockedTiles) le 8 caselle dei sedili degli agenti (4 sedie PC + 4 divanetti)
+      // così il pathfinder BFS non troverà mai le sedute bloccate durante l'avvicinamento, il sedersi o il ripartire.
+      function unblockAllAgentSeats(office) {
+        if (!office || !office.blockedTiles || !office.seats) return;
+        [10, 6, 7, 8].forEach(id => {
+          const dSeat = office.seats.get(WORK_DESK_SEATS[id]);
+          if (dSeat) office.blockedTiles.delete(`${dSeat.seatCol},${dSeat.seatRow}`);
+          const sSeat = office.seats.get(LOUNGE_SOFA_SEATS[id]);
+          if (sSeat) office.blockedTiles.delete(`${sSeat.seatCol},${sSeat.seatRow}`);
+        });
+      }
+
       // Funzione affidabile per spostamento a sedere (Lounge o Scrivania) con unblocking BFS caselle
       function moveAgentToSeat(agentId, targetSeatId, onSofa) {
         const id = Number(agentId);
@@ -1676,6 +1687,8 @@
         if (!office || !office.characters || !targetSeatId) return;
         const ch = office.characters.get(id);
         if (!ch) return;
+
+        unblockAllAgentSeats(office);
 
         const targetSeat = office.seats ? office.seats.get(targetSeatId) : null;
         const oldSeat = (office.seats && ch.seatId) ? office.seats.get(ch.seatId) : null;
@@ -1687,19 +1700,11 @@
           if (targetSeat) targetSeat.assigned = false;
         }
 
-        // Sblocca temporaneamente le caselle del percorso BFS
-        const unblockedKeys = [];
+        // Assicura che la casella di partenza corrente del personaggio sia sbloccata
         if (office.blockedTiles) {
-          const startKey = `${ch.tileCol},${ch.tileRow}`;
-          if (office.blockedTiles.has(startKey)) { office.blockedTiles.delete(startKey); unblockedKeys.push(startKey); }
-          if (oldSeat) {
-            const oldKey = `${oldSeat.seatCol},${oldSeat.seatRow}`;
-            if (office.blockedTiles.has(oldKey)) { office.blockedTiles.delete(oldKey); unblockedKeys.push(oldKey); }
-          }
-          if (targetSeat) {
-            const tgtKey = `${targetSeat.seatCol},${targetSeat.seatRow}`;
-            if (office.blockedTiles.has(tgtKey)) { office.blockedTiles.delete(tgtKey); unblockedKeys.push(tgtKey); }
-          }
+          office.blockedTiles.delete(`${ch.tileCol},${ch.tileRow}`);
+          if (oldSeat) office.blockedTiles.delete(`${oldSeat.seatCol},${oldSeat.seatRow}`);
+          if (targetSeat) office.blockedTiles.delete(`${targetSeat.seatCol},${targetSeat.seatRow}`);
         }
 
         if (ch.seatId !== targetSeatId) {
@@ -1710,19 +1715,11 @@
           office.sendToSeat(id);
         }
 
-        // Ripristina blockedTiles per non alterare le collisioni globali
-        if (office.blockedTiles && unblockedKeys.length > 0) {
-          unblockedKeys.forEach(k => office.blockedTiles.add(k));
-        }
-
         // Configurazione stati di seduta: se sul divano niente wander e niente typing; se alla scrivania attivo per lavorare
         if (onSofa) {
           ch.isActive = false;
           ch.seatTimer = 999999;
           ch.wanderTimer = 999999;
-          if (typeof office.showWaitingBubble === 'function') {
-            setTimeout(() => { try { office.showWaitingBubble(id, false); } catch {} }, 2500);
-          }
         } else {
           ch.isActive = true;
         }
@@ -1813,6 +1810,7 @@
         const office = window.__officeState;
         if (!office || !office.characters || office.characters.size === 0) return;
         if (activeStandupTimer) return; // Se c'è lo standup in corso, non spostare nessuno!
+        unblockAllAgentSeats(office);
         const now = Date.now();
 
         [10, 6, 7, 8].forEach(id => {
@@ -1831,6 +1829,16 @@
             // INATTIVO (IDLE) DA OLTRE 5 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
             if (!agentOnSofa[id]) {
               setAgentLounge(id, true, false);
+            } else {
+              // Rinforza lo stato di permanenza rilassata sul divanetto
+              ch.isActive = false;
+              ch.seatTimer = 999999;
+              ch.wanderTimer = 999999;
+              const sofaSeatId = LOUNGE_SOFA_SEATS[id];
+              const sofaSeat = office.seats ? office.seats.get(sofaSeatId) : null;
+              if (sofaSeat && (ch.seatId !== sofaSeatId || (ch.path && ch.path.length === 0 && (ch.tileCol !== sofaSeat.seatCol || ch.tileRow !== sofaSeat.seatRow)))) {
+                moveAgentToSeat(id, sofaSeatId, true);
+              }
             }
           }
         });

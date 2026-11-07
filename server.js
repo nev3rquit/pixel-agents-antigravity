@@ -773,14 +773,30 @@ function sendOfficeInitProtocol(ws) {
     ws.send(JSON.stringify({ type: 'layoutLoaded', layout: ASSET_CACHE.layout }));
   }
 
-  // 4. Agenti Permanenti
+  // 4. Agenti Permanenti (con assegnamento iniziale: divano se Idle/Resting, scrivania se attivo)
+  const currentQueue = loadTaskQueue();
+  const busyIds = new Set();
+  currentQueue.forEach(t => {
+    if (t.status === 'dispatched' || t.status === 'running') {
+      busyIds.add(Number(t.agentId));
+    }
+  });
+
+  const LOUNGE_SOFA_SEATS = {
+    10: 'f-1773354668333-lo7w', // Divano Nord
+    6:  'f-1773354664329-hxsh', // Divano Ovest
+    7:  'f-1773354670818-r1q2', // Divano Est
+    8:  'f-1773354665989-zgrw'  // Divano Sud
+  };
+
   const agentIds = TEAM.map(a => a.id);
   const agentMeta = {};
   const directoryNames = {};
   const externalAgents = {};
 
   TEAM.forEach(a => {
-    agentMeta[a.id] = { palette: a.palette, hueShift: a.hueShift, seatId: a.seatId };
+    const initialSeatId = (routing.isResting() || !busyIds.has(a.id)) ? (LOUNGE_SOFA_SEATS[a.id] || a.seatId) : a.seatId;
+    agentMeta[a.id] = { palette: a.palette, hueShift: a.hueShift, seatId: initialSeatId };
     directoryNames[a.id] = a.directoryName;
     externalAgents[a.id] = false;
   });
@@ -835,14 +851,6 @@ function sendOfficeInitProtocol(ws) {
   // 6. Sincronizzazione stato Kanban & Lounge Break iniziale per il client
   // Mappa granulare per-agente: chi non ha tool attivi è di default sui divanetti in lounge (Idle),
   // mentre chi ha tool attivi è al PC alla scrivania.
-  const currentQueue = loadTaskQueue();
-  const busyIds = new Set();
-  currentQueue.forEach(t => {
-    if (t.status === 'dispatched' || t.status === 'running') {
-      busyIds.add(Number(t.agentId));
-    }
-  });
-
   const agentLoungeStates = {};
   TEAM.forEach(a => {
     // In modalità rest (quota esaurita) tutti in lounge, altrimenti in lounge solo se non occupati
