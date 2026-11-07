@@ -1570,6 +1570,7 @@
           if (typeof onComplete === 'function') onComplete();
           return;
         }
+        unblockAllAgentSeats(office);
         const sender = office.characters.get(Number(fromId));
         const receiver = office.characters.get(Number(toId));
         if (!sender || !receiver) {
@@ -1582,7 +1583,21 @@
           clearTimeout(activeDelegationAnim.timer);
         }
 
-        const destTile = findNearestWalkableNextTo(office, receiver);
+        // Il ricevente deve andare subito alla propria scrivania di lavoro al PC
+        agentWorking[Number(toId)] = true;
+        agentLastActiveAt[Number(toId)] = Date.now();
+        setAgentLounge(Number(toId), false, true);
+        ensureAgentAtWorkDesk(Number(toId));
+
+        // Per evitare che Alberto calcoli il tragitto su coordinate volanti mentre il ricevente si alza,
+        // calcola la casella di destinazione adiacente alla SCRIVANIA di lavoro del ricevente!
+        const receiverDeskSeatId = WORK_DESK_SEATS[Number(toId)];
+        const receiverDeskSeat = (office.seats && receiverDeskSeatId) ? office.seats.get(receiverDeskSeatId) : null;
+        const destAnchor = receiverDeskSeat
+          ? { tileCol: receiverDeskSeat.seatCol, tileRow: receiverDeskSeat.seatRow }
+          : receiver;
+        const destTile = findNearestWalkableNextTo(office, destAnchor);
+
         sender.isDelivering = true;
 
         // Temporarily unblock sender tile to allow smooth pathfinding departure
@@ -1637,12 +1652,20 @@
           parentPopup.style.left = `${Math.max(130, Math.min(window.innerWidth - 460, pos.x))}px`;
           parentPopup.style.top = `${Math.max(80, pos.y)}px`;
 
-          const dist = Math.abs(sender.tileCol - destTile.col) + Math.abs(sender.tileRow - destTile.row);
-          if (phase === 'walking_to_target' && (sender.path.length === 0 || dist === 0 || (Date.now() - walkStart > 6000))) {
-            phase = 'talking';
-            talkStart = Date.now();
-            parentPopupStep.textContent = tNow.talkStep(shortFrom, shortTo);
-            try { office.showWaitingBubble(receiver.id, false); } catch {}
+          const senderDist = Math.abs(sender.tileCol - destTile.col) + Math.abs(sender.tileRow - destTile.row);
+          // Verifica se il ricevente si è già seduto alla sua scrivania al PC
+          const receiverIsSeatedAtDesk = (receiver.seatId === receiverDeskSeatId) && (!receiver.path || receiver.path.length === 0);
+          const walkTimeout = (Date.now() - walkStart > 7500);
+
+          if (phase === 'walking_to_target') {
+            const senderArrived = (sender.path.length === 0 || senderDist <= 1);
+            // La fase di dialogo scatta solo quando Alberto è arrivato E il ricevente è seduto al suo PC (o dopo safety timeout)
+            if ((senderArrived && receiverIsSeatedAtDesk) || walkTimeout) {
+              phase = 'talking';
+              talkStart = Date.now();
+              parentPopupStep.textContent = tNow.talkStep(shortFrom, shortTo);
+              try { office.showWaitingBubble(receiver.id, false); } catch {}
+            }
           } else if (phase === 'talking' && Date.now() - talkStart > 4500) {
             phase = 'returning';
             parentPopupStep.textContent = tNow.returnStep(shortFrom);
@@ -1817,7 +1840,7 @@
           const ch = office.characters.get(id);
           if (!ch || ch.isDelivering) return; // Se sta camminando per una consegna di delega, non interrompere
 
-          const isActivelyWorking = Boolean(agentWorking[id]) || (now - (agentLastActiveAt[id] || 0) < 5000);
+          const isActivelyWorking = Boolean(agentWorking[id]) || (now - (agentLastActiveAt[id] || 0) < 25000);
 
           if (isActivelyWorking) {
             // DEVE STARE AL PC ALLA SCRIVANIA
@@ -1826,7 +1849,7 @@
             }
             ensureAgentAtWorkDesk(id);
           } else {
-            // INATTIVO (IDLE) DA OLTRE 5 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
+            // INATTIVO (IDLE) DA OLTRE 20 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
             if (!agentOnSofa[id]) {
               setAgentLounge(id, true, false);
             } else {
@@ -2207,6 +2230,14 @@
           7: 'Gabri, aggiorna i componenti UI della dashboard e sincronizza i badge live.',
           8: 'Carlo, esegui un audit di sicurezza e valida i test end-to-end sui WebSocket.'
         };
+        agentWorking[10] = true;
+        agentWorking[targetAgent.id] = true;
+        agentLastActiveAt[10] = Date.now();
+        agentLastActiveAt[targetAgent.id] = Date.now();
+        setAgentLounge(10, false, true);
+        setAgentLounge(targetAgent.id, false, true);
+        ensureAgentAtWorkDesk(targetAgent.id);
+        playRetroSound('delegation');
         triggerAgentDelegationWalk(
           10,
           targetAgent.id,
