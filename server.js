@@ -1178,6 +1178,15 @@ wss.on('connection', (ws, req) => {
       } else if (data.type === 'toggleLoungeBreak') {
         const active = Boolean(data.active);
         broadcast({ type: 'loungeBreakState', active, reason: 'manual_toggle' });
+      } else if (data.type === 'callStandupMeeting') {
+        const topic = (data.topic || 'Allineamento Architetturale & Sprint Sync').trim();
+        broadcast({
+          type: 'standupMeetingStarted',
+          leaderId: 10,
+          leaderName: 'Alberto (CEO)',
+          topic,
+          time: new Date().toLocaleTimeString()
+        });
       } else if (data.type === 'requestPermission') {
         const targetId = Number(data.agentId || data.id) || 10;
         const requestId = data.requestId || `perm_${Date.now()}`;

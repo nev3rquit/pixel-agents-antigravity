@@ -599,6 +599,7 @@
           <button class="quick-chip" id="chip-perm" style="border-color:#d29922; color:#e3b341;" onclick="simulatePermissionRequest()">⚠️ Test Autorizzazione</button>
           <button class="quick-chip" id="chip-walk" style="border-color:#58a6ff; color:#58a6ff;" onclick="simulateDelegationWalk()">🚶‍♂️ Test Delegacy Alberto→Luigi</button>
           <button class="quick-chip" id="chip-lounge" style="border-color:#bc8cff; color:#bc8cff;" onclick="toggleLoungeBreak()">☕ Pausa Divano</button>
+          <button class="quick-chip" id="chip-standup" style="border-color:#3fb950; color:#3fb950;" onclick="triggerStandupMeeting()">📢 Convoca Riunione</button>
         </div>
 
         <div class="command-bar">
@@ -657,6 +658,11 @@
           chipWalk: '🚶‍♂️ Test Delegacy Alberto→Luigi',
           chipLoungeOff: '☕ Pausa Divano',
           chipLoungeOn: '💻 Torna alle Scrivanie',
+          chipStandup: '📢 Convoca Riunione',
+          standupHeader: '📢 RIUNIONE GENERALE (STANDUP MEETING)',
+          standupWalkStep: '🚶‍♂️ Luigi, Gabri e Carlo raggiungono la scrivania di Alberto...',
+          standupTalkStep: '🤝 Team riunito! Allineamento sprint in corso con Alberto (CEO)...',
+          standupEndStep: '🚀 Riunione conclusa! Tutti tornano alle proprie postazioni.',
           loungeEnterLog: '☕ Pausa Caffè / Riposo: si sposta sui divani della sala relax...',
           loungeExitLog: '💻 Fine pausa: rientro immediato alla scrivania operativa!',
           inputPh: "Assegna un'istruzione a questo agente...",
@@ -682,6 +688,11 @@
           chipWalk: '🚶‍♂️ Test Delegation Alberto→Luigi',
           chipLoungeOff: '☕ Sofa Break',
           chipLoungeOn: '💻 Back to Desks',
+          chipStandup: '📢 Call Standup Meeting',
+          standupHeader: '📢 ALL-HANDS STANDUP MEETING',
+          standupWalkStep: '🚶‍♂️ Luigi, Gabri & Carlo are gathering at Alberto\'s desk...',
+          standupTalkStep: '🤝 Team gathered! Sprint alignment in progress with Alberto (CEO)...',
+          standupEndStep: '🚀 Standup complete! Returning to workstations.',
           loungeEnterLog: '☕ Coffee / Rest Break: walking to the lounge sofas...',
           loungeExitLog: '💻 Break over: returning to workstation desk!',
           inputPh: 'Assign a task or instruction to this agent...',
@@ -709,6 +720,7 @@
         const c4 = document.getElementById('chip-perm'); if (c4) c4.textContent = t.chipPerm;
         const c5 = document.getElementById('chip-walk'); if (c5) c5.textContent = t.chipWalk;
         const c6 = document.getElementById('chip-lounge'); if (c6) c6.textContent = isLoungeBreakActive ? t.chipLoungeOn : t.chipLoungeOff;
+        const c7 = document.getElementById('chip-standup'); if (c7) c7.textContent = t.chipStandup;
         const inp = document.getElementById('task-input'); if (inp) inp.placeholder = t.inputPh;
         const sBtn = document.getElementById('send-task-btn'); if (sBtn) sBtn.textContent = t.sendBtn;
         [10, 6, 7, 8].forEach(id => {
@@ -1192,6 +1204,11 @@
           if (msg.type === 'agentModeChange' && msg.mode) {
             setLoungeBreak(msg.mode === 'rest', false);
           }
+
+          // Riunione Generale / Standup Meeting attorno alla scrivania di Alberto (CEO)
+          if (msg.type === 'standupMeetingStarted') {
+            startStandupAnimation(msg.topic, false);
+          }
         } catch (err) {
           console.error('[Webview] Errore ws message:', err);
         }
@@ -1385,6 +1402,95 @@
           setLoungeBreak(true, false);
         }
       }, 15000);
+
+      // =========================================================================
+      // INNOVAZIONE #2: RIUNIONE GENERALE / STANDUP MEETING ATTORNO AD ALBERTO
+      // =========================================================================
+      const STANDUP_SPOTS = {
+        6: { col: 5, row: 14 }, // Luigi accanto ad Alberto
+        7: { col: 3, row: 15 }, // Gabri di fronte ad Alberto
+        8: { col: 5, row: 15 }  // Carlo a fianco
+      };
+      let activeStandupTimer = null;
+
+      function startStandupAnimation(topicText, notifyWs = true) {
+        const office = window.__officeState;
+        if (!office || !office.characters) return;
+        if (isLoungeBreakActive) setLoungeBreak(false, false);
+
+        const t = I18N[appLang] || I18N.it;
+        const topic = topicText || (appLang === 'it'
+          ? 'Allineamento Sprint: stato Backend (Luigi), UI Canvas (Gabri) e Security Audit (Carlo).'
+          : 'Sprint Alignment: Backend status (Luigi), Canvas UI (Gabri) & Security Audit (Carlo).');
+        const time = new Date().toLocaleTimeString();
+
+        if (activeStandupTimer) clearTimeout(activeStandupTimer);
+        if (activeDelegationAnim) {
+          cancelAnimationFrame(activeDelegationAnim.raf);
+          clearTimeout(activeDelegationAnim.timer);
+          activeDelegationAnim = null;
+        }
+
+        // Fai alzare Luigi, Gabri e Carlo e falli camminare intorno alla scrivania di Alberto (CEO)
+        [6, 7, 8].forEach(id => {
+          const ch = office.characters.get(id);
+          const spot = STANDUP_SPOTS[id];
+          if (ch && spot) {
+            ch.isDelivering = true;
+            office.walkToTile(id, spot.col, spot.row);
+          }
+        });
+
+        TEAM.forEach(a => {
+          appendLog(a.id, `[${time}] 📢 Standup Meeting: "${topic}"`, 'task');
+        });
+
+        // Mostra il fumetto sopra la scrivania di Alberto (CEO)
+        const ceoChar = office.characters.get(10);
+        if (ceoChar) {
+          const popupTitleEl = parentPopup.querySelector('span');
+          if (popupTitleEl) popupTitleEl.textContent = t.standupHeader;
+          parentPopupBadge.textContent = 'Alberto + Team';
+          parentPopupText.textContent = `"${topic}"`;
+          parentPopupStep.textContent = t.standupWalkStep;
+          const pos = getCharacterScreenCoords(ceoChar);
+          parentPopup.style.left = `${Math.max(130, Math.min(window.innerWidth - 460, pos.x + 25))}px`;
+          parentPopup.style.top = `${Math.max(80, pos.y)}px`;
+          parentPopup.style.display = 'block';
+          parentPopup.style.opacity = '1';
+        }
+
+        setTimeout(() => {
+          const tNow = I18N[appLang] || I18N.it;
+          parentPopupStep.textContent = tNow.standupTalkStep;
+          [10, 6, 7, 8].forEach(id => {
+            try { office.showWaitingBubble(id, false); } catch {}
+          });
+        }, 2800);
+
+        activeStandupTimer = setTimeout(() => {
+          const tNow = I18N[appLang] || I18N.it;
+          parentPopupStep.textContent = tNow.standupEndStep;
+          [6, 7, 8].forEach(id => {
+            const ch = office.characters.get(id);
+            if (ch) ch.isDelivering = false;
+            try { office.sendToSeat(id); } catch {}
+          });
+          setTimeout(() => {
+            parentPopup.style.opacity = '0';
+            setTimeout(() => { parentPopup.style.display = 'none'; }, 260);
+          }, 2200);
+        }, 7800);
+
+        if (notifyWs && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'callStandupMeeting', topic }));
+        }
+      }
+
+      window.triggerStandupMeeting = function() {
+        lastTeamActivityAt = Date.now();
+        startStandupAnimation(null, true);
+      };
 
       applyLanguage();
 
