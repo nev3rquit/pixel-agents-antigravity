@@ -158,7 +158,7 @@ function dispatchRealTask(agent, rawInput) {
 
   if (isSystemCommand && targetCmd) {
     const options = {
-      cwd: WORKSPACE_DIR,
+      cwd: routing.getTargetProject() || WORKSPACE_DIR,
       timeout: 15000,
       maxBuffer: 512 * 1024,
       windowsHide: true
@@ -277,7 +277,8 @@ function dispatchRealTask(agent, rawInput) {
 
     // Invia direttamente tramite l'eseguibile nativo language_server.exe agentapi send-message
     const serverExe = path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'antigravity', 'resources', 'bin', 'language_server.exe');
-    const msgContent = `Messaggio operativo dalla Dashboard Web AziendaAI: ${text}`;
+    const activeProj = routing.getTargetProject();
+    const msgContent = `[Progetto Target Attivo: ${activeProj}] Messaggio operativo dalla Dashboard Web AziendaAI: ${text}`;
 
     execFile(serverExe, ['agentapi', 'send-message', targetSubagentId, msgContent], { timeout: 15000, windowsHide: true }, (apiErr, apiStdout, apiStderr) => {
       const finishTime = new Date();
@@ -804,6 +805,11 @@ function sendOfficeInitProtocol(ws) {
 
   // Invia anche lo stato team compatibile con dashboard custom
   ws.send(JSON.stringify({ type: 'init', team: TEAM }));
+  ws.send(JSON.stringify({
+    type: 'targetProjectChanged',
+    projectPath: routing.getTargetProject(),
+    projectName: path.basename(routing.getTargetProject())
+  }));
 
   if (lastQuotaData) {
     ws.send(JSON.stringify({
@@ -1190,6 +1196,18 @@ wss.on('connection', (ws, req) => {
           topic,
           time: new Date().toLocaleTimeString()
         });
+      } else if (data.type === 'setTargetProject') {
+        const res = routing.setTargetProject(data.projectPath);
+        if (res.ok) {
+          broadcast({
+            type: 'targetProjectChanged',
+            projectPath: res.projectPath,
+            projectName: res.projectName,
+            source: 'Web Dashboard'
+          });
+        } else {
+          ws.send(JSON.stringify({ type: 'targetProjectError', error: res.error }));
+        }
       } else if (data.type === 'requestPermission') {
         const targetId = Number(data.agentId || data.id) || 10;
         const requestId = data.requestId || `perm_${Date.now()}`;
@@ -1293,6 +1311,26 @@ wss.on('connection', (ws, req) => {
 // REST API per stato e log
 app.get('/api/team', (req, res) => {
   res.json({ team: TEAM });
+});
+
+app.get('/api/project', (req, res) => {
+  const cur = routing.getTargetProject();
+  res.json({ projectPath: cur, projectName: path.basename(cur) });
+});
+
+app.post('/api/project', (req, res) => {
+  const { projectPath } = req.body || {};
+  const result = routing.setTargetProject(projectPath);
+  if (!result.ok) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  broadcast({
+    type: 'targetProjectChanged',
+    projectPath: result.projectPath,
+    projectName: result.projectName,
+    source: 'REST API'
+  });
+  res.json(result);
 });
 
 app.get('/api/tasks/queue', (req, res) => {

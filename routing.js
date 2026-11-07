@@ -39,8 +39,24 @@ const state = {
   resumeAt: null,
   geminiResetAt: null,
   claudeResetAt: null,
-  restQueue: []
+  restQueue: [],
+  targetProject: path.resolve(__dirname)
 };
+
+function getTargetProject() {
+  return state.targetProject || path.resolve(__dirname);
+}
+
+function setTargetProject(newPath) {
+  const cleaned = String(newPath || '').trim().replace(/^"|"$/g, '');
+  if (!cleaned) return { ok: false, error: 'Percorso vuoto' };
+  const resolved = path.resolve(cleaned);
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+    return { ok: false, error: `Cartella non trovata: ${resolved}` };
+  }
+  state.targetProject = resolved;
+  return { ok: true, projectPath: resolved, projectName: path.basename(resolved) };
+}
 
 function updateMode({ g5h, c5h, cWeekly, resumeAt, geminiResetAt, claudeResetAt }) {
   const prev = state.mode;
@@ -104,6 +120,8 @@ module.exports = {
   restMessage,
   enqueueRestTask,
   flushRestQueue,
+  getTargetProject,
+  setTargetProject,
   PRIMARY,
   ALTEREGO,
   setClaudeActive,

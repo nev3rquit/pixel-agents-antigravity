@@ -518,6 +518,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <div class="team-bar" id="team-pills"></div>
+        <button id="project-switcher-btn" onclick="openProjectModal()" title="Cambia Progetto Target / Switch Target Workspace" style="background:#21262d; color:#3fb950; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;">📂 <span id="label-project-btn">Progetto:</span> <code id="active-project-name" style="color:#f0f6fc; font-family:Consolas,monospace;">AziendaAI</code></button>
         <button id="kanban-toggle-btn" onclick="openKanbanModal()" style="background:#21262d; color:#58a6ff; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;">📋 <span id="label-kanban-btn">Lavagna Task</span> <span id="kanban-count-badge" style="background:#1f6feb; color:#fff; border-radius:99px; padding:1px 6px; font-size:0.68rem;">0</span></button>
         <button id="lang-toggle-btn" onclick="toggleAppLang()" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">🇮🇹 IT</button>
       </div>
@@ -699,6 +700,48 @@
       </div>
     </div>
 
+    <!-- INNOVAZIONE #4: MODALE SELETTORE PROGETTO TARGET (MULTI-WORKSPACE) -->
+    <div id="project-modal-overlay" onclick="if(event.target===this) closeProjectModal()" style="
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10001;
+      background: rgba(1, 4, 9, 0.78);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    ">
+      <div style="
+        width: 100%;
+        max-width: 580px;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.85);
+        overflow: hidden;
+      ">
+        <div style="padding: 14px 20px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.2rem;">📂</span>
+            <h2 id="project-modal-title" style="font-size: 1rem; color: #f0f6fc; margin: 0;">Seleziona Progetto Target Operativo</h2>
+          </div>
+          <button onclick="closeProjectModal()" style="background:#da3633; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.78rem; font-weight:700; cursor:pointer;">✕</button>
+        </div>
+        <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+          <p id="project-modal-desc" style="font-size: 0.82rem; color: #8b949e; line-height: 1.45;">
+            Indica il percorso assoluto della cartella su cui vuoi far lavorare Alberto (CEO), Luigi, Gabri e Carlo (puoi cambiarlo anche da Discord con <code style="color:#58a6ff;">!project &lt;percorso&gt;</code>).
+          </p>
+          <input id="project-path-input" type="text" placeholder="Es: C:\Users\Alberto\Desktop\MioProgetto" style="background:#161b22; border:1px solid #30363d; color:#f0f6fc; padding:10px 12px; border-radius:6px; font-family:Consolas,monospace; font-size:0.86rem; outline:none;" />
+          <div id="project-error-msg" style="display:none; color:#ff7b72; font-size:0.78rem;"></div>
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+            <button onclick="closeProjectModal()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px 14px; font-size:0.82rem; cursor:pointer;">Annulla</button>
+            <button id="project-save-btn" onclick="saveTargetProject()" style="background:#238636; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:0.82rem; font-weight:700; cursor:pointer;">✅ Imposta Progetto</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- SCRIPT BRIDGE PER SINCRONIZZARE TOPBAR, TENDINA E MOTORE CANVAS -->
     <script>
       // =========================================================================
@@ -730,6 +773,9 @@
           kanbanColActive: '⚡ In Corso / Assegnati',
           kanbanColDone: '✅ Completati',
           kanbanEmpty: 'Nessun task in questa colonna',
+          projBtn: 'Progetto:',
+          projModalTitle: 'Seleziona Progetto Target Operativo',
+          projSaveBtn: '✅ Imposta Progetto',
           standupHeader: '📢 RIUNIONE GENERALE (STANDUP MEETING)',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri e Carlo raggiungono la scrivania di Alberto...',
           standupTalkStep: '🤝 Team riunito! Allineamento sprint in corso con Alberto (CEO)...',
@@ -767,6 +813,9 @@
           kanbanColActive: '⚡ In Progress / Dispatched',
           kanbanColDone: '✅ Completed',
           kanbanEmpty: 'No tasks in this column',
+          projBtn: 'Workspace:',
+          projModalTitle: 'Select Target Project Workspace',
+          projSaveBtn: '✅ Set Workspace',
           standupHeader: '📢 ALL-HANDS STANDUP MEETING',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri & Carlo are gathering at Alberto\'s desk...',
           standupTalkStep: '🤝 Team gathered! Sprint alignment in progress with Alberto (CEO)...',
@@ -805,6 +854,9 @@
         const kbC1 = document.getElementById('kanban-col-queued-title'); if (kbC1) kbC1.textContent = t.kanbanColQueued;
         const kbC2 = document.getElementById('kanban-col-active-title'); if (kbC2) kbC2.textContent = t.kanbanColActive;
         const kbC3 = document.getElementById('kanban-col-done-title'); if (kbC3) kbC3.textContent = t.kanbanColDone;
+        const prjB = document.getElementById('label-project-btn'); if (prjB) prjB.textContent = t.projBtn;
+        const prjT = document.getElementById('project-modal-title'); if (prjT) prjT.textContent = t.projModalTitle;
+        const prjS = document.getElementById('project-save-btn'); if (prjS) prjS.textContent = t.projSaveBtn;
         const inp = document.getElementById('task-input'); if (inp) inp.placeholder = t.inputPh;
         const sBtn = document.getElementById('send-task-btn'); if (sBtn) sBtn.textContent = t.sendBtn;
         [10, 6, 7, 8].forEach(id => {
@@ -1299,6 +1351,15 @@
             kanbanTasks = msg.queue;
             renderKanbanBoard();
           }
+
+          // Cambio Progetto Target sincronizzato da Web o Discord
+          if (msg.type === 'targetProjectChanged' && msg.projectPath) {
+            currentProjectPath = msg.projectPath;
+            const nameEl = document.getElementById('active-project-name');
+            if (nameEl) nameEl.textContent = msg.projectName || msg.projectPath.split(/[\\/]/).pop();
+            const btnEl = document.getElementById('project-switcher-btn');
+            if (btnEl) btnEl.title = `Progetto Attivo: ${msg.projectPath}`;
+          }
         } catch (err) {
           console.error('[Webview] Errore ws message:', err);
         }
@@ -1663,6 +1724,74 @@
       };
 
       fetchKanbanTasks();
+
+      // =========================================================================
+      // INNOVAZIONE #4: SELETTORE PROGETTO TARGET (MULTI-WORKSPACE)
+      // =========================================================================
+      let currentProjectPath = '';
+
+      async function fetchActiveProject() {
+        try {
+          const res = await fetch('/api/project');
+          const data = await res.json();
+          if (data && data.projectPath) {
+            currentProjectPath = data.projectPath;
+            const nameEl = document.getElementById('active-project-name');
+            if (nameEl) nameEl.textContent = data.projectName || data.projectPath.split(/[\\/]/).pop();
+            const btnEl = document.getElementById('project-switcher-btn');
+            if (btnEl) btnEl.title = `Progetto Attivo: ${data.projectPath}`;
+          }
+        } catch {}
+      }
+
+      window.openProjectModal = function() {
+        const el = document.getElementById('project-modal-overlay');
+        const inp = document.getElementById('project-path-input');
+        const err = document.getElementById('project-error-msg');
+        if (err) err.style.display = 'none';
+        if (inp) inp.value = currentProjectPath;
+        if (el) el.style.display = 'flex';
+      };
+
+      window.closeProjectModal = function() {
+        const el = document.getElementById('project-modal-overlay');
+        if (el) el.style.display = 'none';
+      };
+
+      window.saveTargetProject = async function() {
+        const inp = document.getElementById('project-path-input');
+        const err = document.getElementById('project-error-msg');
+        const newPath = inp ? inp.value.trim() : '';
+        if (!newPath) return;
+        try {
+          const res = await fetch('/api/project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectPath: newPath })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            if (err) {
+              err.textContent = data.error || 'Percorso non valido';
+              err.style.display = 'block';
+            }
+            return;
+          }
+          currentProjectPath = data.projectPath;
+          const nameEl = document.getElementById('active-project-name');
+          if (nameEl) nameEl.textContent = data.projectName;
+          closeProjectModal();
+          const time = new Date().toLocaleTimeString();
+          appendLog(10, `[${time}] 📂 Progetto Target cambiato su: ${data.projectPath}`, 'done');
+        } catch (e) {
+          if (err) {
+            err.textContent = e.message;
+            err.style.display = 'block';
+          }
+        }
+      };
+
+      fetchActiveProject();
 
       applyLanguage();
 

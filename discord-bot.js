@@ -87,6 +87,30 @@ function initDiscordBot(onBroadcast) {
     }
 
     const content = message.content.trim();
+    if (content.toLowerCase().startsWith('!project') || content.toLowerCase().startsWith('!workspace') || content.toLowerCase().startsWith('!progetto')) {
+      const arg = content.replace(/^!(project|workspace|progetto)\s*/i, '').trim();
+      if (!arg) {
+        const cur = routing.getTargetProject();
+        await message.channel.send(`📂 **Progetto Target Attivo:** \`${cur}\`\n💡 *Usa \`!project <percorso>\` per cambiare il repository/progetto su cui lavorano Alberto, Luigi, Gabri e Carlo.*`).catch(() => {});
+        return;
+      }
+      const res = routing.setTargetProject(arg);
+      if (!res.ok) {
+        await message.channel.send(`❌ **Errore cambio progetto:** ${res.error}`).catch(() => {});
+        return;
+      }
+      await message.channel.send(`✅ **Progetto Target aggiornato!**\n📂 Ora il team lavora su: \`${res.projectPath}\``).catch(() => {});
+      if (broadcastCallback) {
+        broadcastCallback({
+          type: 'targetProjectChanged',
+          projectPath: res.projectPath,
+          projectName: res.projectName,
+          source: `Discord (${message.author.username})`
+        });
+      }
+      return;
+    }
+
     if (content.startsWith('!')) {
       const parts = content.slice(1).split(' ');
       const prefix = parts[0].toLowerCase();
@@ -109,7 +133,8 @@ function initDiscordBot(onBroadcast) {
       await message.react('⚡');
     } catch {}
 
-    const msgContent = `Messaggio operativo ricevuto da Discord (${message.author.username}): ${content}`;
+    const activeProj = routing.getTargetProject();
+    const msgContent = `[Progetto Target Attivo: ${activeProj}] Messaggio operativo ricevuto da Discord (${message.author.username}): ${content}`;
 
     execFile(SERVER_EXE, ['agentapi', 'send-message', routing.resolveSubagent(target.id), msgContent], { timeout: 15000, windowsHide: true }, (err, stdout, stderr) => {
       if (err) {
