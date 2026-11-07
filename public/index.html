@@ -618,25 +618,25 @@
       display: none;
       position: fixed;
       z-index: 9999;
-      max-width: 520px;
-      min-width: 320px;
+      max-width: 640px;
+      min-width: 360px;
       background: rgba(13, 17, 23, 0.98);
       border: 2px solid #58a6ff;
-      border-radius: 12px;
-      padding: 14px 18px;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9), 0 0 20px rgba(88, 166, 255, 0.45);
+      border-radius: 14px;
+      padding: 18px 22px;
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.95), 0 0 25px rgba(88, 166, 255, 0.5);
       color: #e6edf3;
       font-family: 'Segoe UI', system-ui, sans-serif;
       pointer-events: none;
       transform: translate(-50%, -100%);
       transition: opacity 0.25s ease;
     ">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; border-bottom:1px solid #30363d; padding-bottom:6px;">
-        <span style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#58a6ff;">📨 Message from Parent Agent</span>
-        <span id="parent-popup-badge" style="font-size:0.75rem; background:#1f6feb; color:#fff; padding:3px 10px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; border-bottom:1px solid #30363d; padding-bottom:8px;">
+        <span style="font-size:0.86rem; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:#58a6ff;">📨 Message from Parent Agent</span>
+        <span id="parent-popup-badge" style="font-size:0.82rem; background:#1f6feb; color:#fff; padding:4px 12px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
       </div>
-      <div id="parent-popup-text" style="font-size:0.94rem; line-height:1.5; color:#ffffff; font-weight:500; word-break:break-word; max-height:220px; overflow-y:auto;"></div>
-      <div id="parent-popup-step" style="font-size:0.76rem; color:#8b949e; margin-top:8px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
+      <div id="parent-popup-text" style="font-size:1.06rem; line-height:1.6; color:#ffffff; font-weight:500; word-break:break-word; max-height:260px; overflow-y:auto;"></div>
+      <div id="parent-popup-step" style="font-size:0.84rem; color:#8b949e; margin-top:10px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
     </div>
 
     <!-- INNOVAZIONE #3: MODALE LAVAGNA KANBAN LIVE (3 COLONNE) -->
@@ -1400,13 +1400,19 @@
           // Attività o log dettagliato
           if (msg.type === 'agentActivity') {
             const targetId = Number(msg.agentId || msg.id || 10);
-            agentWorking[targetId] = true;
-            agentLastActiveAt[targetId] = Date.now();
-            agentOnSofa[targetId] = false;
-            setAgentLounge(targetId, false, true);
-            ensureAgentAtWorkDesk(targetId);
+            const isIdleActivity = msg.tool === 'Response' || (msg.status && (msg.status.includes('Idle') || msg.status.includes('attesa') || msg.status.includes('riposo')));
+            if (!isIdleActivity) {
+              agentWorking[targetId] = true;
+              agentLastActiveAt[targetId] = Date.now();
+              agentOnSofa[targetId] = false;
+              setAgentLounge(targetId, false, true);
+              ensureAgentAtWorkDesk(targetId);
+            } else {
+              agentWorking[targetId] = false;
+              agentLastActiveAt[targetId] = Date.now() - 5000;
+            }
             if (msg.status) {
-              agentStatuses[targetId] = `⚡ ${msg.status}`;
+              agentStatuses[targetId] = isIdleActivity ? '🟢 In attesa di istruzioni (Idle)' : `⚡ ${msg.status}`;
               updateStatusDisplay(targetId);
             }
             if (msg.log) {
@@ -1418,7 +1424,7 @@
           if (msg.type === 'agentStatus' && msg.status === 'waiting') {
             const targetId = Number(msg.id || msg.agentId || 10);
             agentWorking[targetId] = false;
-            agentLastActiveAt[targetId] = Date.now();
+            agentLastActiveAt[targetId] = Date.now() - 5000;
             agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
             updateStatusDisplay(targetId);
             appendLog(targetId, `[${time}] ✔ Operazione completata. In attesa di nuove istruzioni.`, 'done');
@@ -1427,7 +1433,7 @@
           if (msg.type === 'agentToolsClear') {
             const targetId = Number(msg.id || msg.agentId || 10);
             agentWorking[targetId] = false;
-            agentLastActiveAt[targetId] = Date.now();
+            agentLastActiveAt[targetId] = Date.now() - 5000;
             agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
             updateStatusDisplay(targetId);
           }
@@ -1642,7 +1648,7 @@
             : (Number(toId) === 10 ? '📊 REPORT OPERATIVO PER IL CEO' : '🤝 COLLABORAZIONE TEAM');
         }
         parentPopupBadge.textContent = `${shortFrom} ➔ ${shortTo}`;
-        parentPopupText.textContent = `"${shortMsg}"`;
+        parentPopupText.textContent = `🚶 In avvicinamento a ${shortTo}...`;
         parentPopupStep.textContent = t.walkStep(shortFrom, shortTo);
         parentPopup.style.display = 'block';
         parentPopup.style.opacity = '1';
@@ -1665,16 +1671,19 @@
           if (sender) sender.isDelivering = false;
           // Segna il completamento dello scambio in modo che entrambi possano tornare Idle
           agentWorking[Number(fromId)] = false;
-          agentLastActiveAt[Number(fromId)] = Date.now();
-          agentLastActiveAt[Number(toId)] = Date.now();
+          agentWorking[Number(toId)] = false;
+          agentLastActiveAt[Number(fromId)] = Date.now() - 5000;
+          agentLastActiveAt[Number(toId)] = Date.now() - 5000;
 
-          // Alberto (CEO) torna immediatamente al suo divano lounge dopo aver delegato
-          if (Number(fromId) === 10) {
-            agentOnSofa[10] = true;
-            try {
-              moveAgentToSeat(10, LOUNGE_SOFA_SEATS[10], true);
-            } catch {}
-          }
+          // Se chi ha delegato o ricevuto non ha task pendenti, si accomodano sui rispettivi divanetti lounge
+          [Number(fromId), Number(toId)].forEach(agId => {
+            if (!agentWorking[agId]) {
+              agentOnSofa[agId] = true;
+              try {
+                moveAgentToSeat(agId, LOUNGE_SOFA_SEATS[agId], true);
+              } catch {}
+            }
+          });
           if (typeof onComplete === 'function') onComplete();
         }
 
@@ -1697,14 +1706,15 @@
 
           if (phase === 'walking_to_target') {
             const senderArrived = (!sender.path || sender.path.length === 0 || senderDist <= 1);
-            // La fase di dialogo scatta appena Alberto è vicino e il collega è posizionato (o timeout breve)
+            // La fase di dialogo scatta SOLO quando il collega ricevente si è già seduto alla scrivania al PC e Alberto è arrivato
             if ((senderArrived && receiverIsSeatedAtDesk) || walkTimeout) {
               phase = 'talking';
               talkStart = Date.now();
+              parentPopupText.textContent = `"${shortMsg}"`;
               parentPopupStep.textContent = tNow.talkStep(shortFrom, shortTo);
               try { office.showWaitingBubble(receiver.id, false); } catch {}
             }
-          } else if (phase === 'talking' && Date.now() - talkStart > 6500) {
+          } else if (phase === 'talking' && Date.now() - talkStart > 7500) {
             phase = 'returning';
             parentPopupStep.textContent = tNow.returnStep(shortFrom);
             sender.isDelivering = false;
@@ -1875,7 +1885,7 @@
         }
       };
 
-      const IDLE_LOUNGE_TIMEOUT_MS = 14000; // Delay bilanciato di ~14s di inattività dopo il completamento prima di andare sul divano
+      const IDLE_LOUNGE_TIMEOUT_MS = 4000; // Delay fluido di ~4s di inattività dopo il completamento prima di andare sul divano
 
       // Routine di sincronizzazione automatica Idle = Divanetti Lounge / Working = Scrivania PC
       function syncOfficeLoungeAndDesks() {
