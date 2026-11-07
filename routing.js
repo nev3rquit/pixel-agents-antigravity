@@ -48,14 +48,48 @@ function getTargetProject() {
 }
 
 function setTargetProject(newPath) {
-  const cleaned = String(newPath || '').trim().replace(/^"|"$/g, '');
-  if (!cleaned) return { ok: false, error: 'Percorso vuoto' };
-  const resolved = path.resolve(cleaned);
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-    return { ok: false, error: `Cartella non trovata: ${resolved}` };
+  try {
+    const cleaned = String(newPath || '').trim().replace(/^["']|["']$/g, '');
+    if (!cleaned) return { ok: false, error: 'Percorso vuoto' };
+    if (cleaned.includes('\0')) return { ok: false, error: 'Caratteri non validi nel percorso' };
+
+    const resolved = path.resolve(cleaned);
+    const parsed = path.parse(resolved);
+
+    // Confinamento / Anti-Traversal: impedisce di impostare la root del filesystem come target
+    if (resolved.toLowerCase() === parsed.root.toLowerCase()) {
+      return { ok: false, error: 'Impossibile selezionare la directory radice come cartella di progetto' };
+    }
+
+    // Protezione percorsi di sistema critici (Windows / OS)
+    const lower = resolved.toLowerCase();
+    const forbidden = [
+      'c:\\windows',
+      'c:\\program files',
+      'c:\\program files (x86)',
+      'c:\\programdata',
+      'c:\\recovery',
+      'c:\\$recycle.bin',
+      'c:\\system volume information'
+    ];
+    if (forbidden.some(f => lower === f || lower.startsWith(f + '\\'))) {
+      return { ok: false, error: 'Accesso negato: directory di sistema protetta' };
+    }
+
+    if (!fs.existsSync(resolved)) {
+      return { ok: false, error: `Cartella non trovata: ${resolved}` };
+    }
+
+    const stat = fs.statSync(resolved);
+    if (!stat.isDirectory()) {
+      return { ok: false, error: `Il percorso specificato non è una directory: ${resolved}` };
+    }
+
+    state.targetProject = resolved;
+    return { ok: true, projectPath: resolved, projectName: path.basename(resolved) };
+  } catch (err) {
+    return { ok: false, error: `Errore validazione percorso: ${err.message}` };
   }
-  state.targetProject = resolved;
-  return { ok: true, projectPath: resolved, projectName: path.basename(resolved) };
 }
 
 function updateMode({ g5h, c5h, cWeekly, resumeAt, geminiResetAt, claudeResetAt }) {

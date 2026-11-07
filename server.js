@@ -710,6 +710,8 @@ try {
 }
 
 // Broadcast WebSocket con gestione sicura degli errori
+let isLoungeBreakActive = false;
+
 function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(client => {
@@ -829,6 +831,18 @@ function sendOfficeInitProtocol(ws) {
       maxContextTokens: tok.max
     }));
   }
+
+  // 6. Sincronizzazione stato Kanban & Lounge Break iniziale per il client
+  ws.send(JSON.stringify({
+    type: 'tasksQueueUpdated',
+    queue: loadTaskQueue(),
+    mode: routing.getMode()
+  }));
+  ws.send(JSON.stringify({
+    type: 'loungeBreakState',
+    active: isLoungeBreakActive || routing.isResting(),
+    reason: 'initial_sync'
+  }));
 }
 
 // ==========================================
@@ -1018,6 +1032,7 @@ async function getLiveQuotaAndModels() {
       }
       try { sendDiscordAnnouncement(ann.t, ann.c); } catch {}
       broadcast({ type: 'agentModeChange', mode: tr.mode, message: ann.t });
+      isLoungeBreakActive = (tr.mode === 'rest');
       broadcast({ type: 'loungeBreakState', active: tr.mode === 'rest', reason: tr.mode === 'rest' ? 'quota_rest' : 'quota_resumed' });
     }
     const subagentsList = [];
@@ -1181,12 +1196,45 @@ wss.on('connection', (ws, req) => {
         
         // Inoltra l'istruzione reale tramite Command Bridge Reale
         if (!routing.isResting()) {
+          isLoungeBreakActive = false;
           broadcast({ type: 'loungeBreakState', active: false, reason: 'task_dispatched' });
         }
         dispatchRealTask(agent, text);
-      } else if (data.type === 'toggleLoungeBreak') {
+      } else if (data.type === 'toggleLoungeBreak' || data.type === 'breakMode') {
         const active = Boolean(data.active);
-        broadcast({ type: 'loungeBreakState', active, reason: 'manual_toggle' });
+        const specificAgentId = (data.agentId !== undefined && data.agentId !== null) ? Number(data.agentId) : null;
+        
+        let targetAgentIds = [];
+        if (specificAgentId) {
+          // 1. Pausa mirata su singolo agente specifico
+          targetAgentIds = [specificAgentId];
+        } else if (active && !routing.isResting()) {
+          // 2. Se non specificato, applica la pausa unicamente agli agenti non occupati (idle)
+          const currentQueue = loadTaskQueue();
+          const busyIds = new Set();
+          currentQueue.forEach(t => {
+            if (t.status === 'dispatched' || t.status === 'running') {
+              busyIds.add(Number(t.agentId));
+            }
+          });
+          TEAM.forEach(a => {
+            if (!busyIds.has(a.id) && a.status !== 'working') {
+              targetAgentIds.push(a.id);
+            }
+          });
+        } else {
+          // 3. Se rientro (active=false) o riposo globale per quote esaurite (rest)
+          targetAgentIds = TEAM.map(a => a.id);
+        }
+
+        isLoungeBreakActive = active;
+        broadcast({
+          type: 'loungeBreakState',
+          active,
+          agentId: specificAgentId,
+          agentIds: targetAgentIds,
+          reason: specificAgentId ? 'agent_toggle' : (data.reason || 'manual_toggle')
+        });
       } else if (data.type === 'callStandupMeeting') {
         const topic = (data.topic || 'Allineamento Architetturale & Sprint Sync').trim();
         broadcast({

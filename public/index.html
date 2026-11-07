@@ -737,7 +737,7 @@
           <input id="project-path-input" type="text" placeholder="Es: C:\Users\Alberto\Desktop\MioProgetto" style="background:#161b22; border:1px solid #30363d; color:#f0f6fc; padding:10px 12px; border-radius:6px; font-family:Consolas,monospace; font-size:0.86rem; outline:none;" />
           <div id="project-error-msg" style="display:none; color:#ff7b72; font-size:0.78rem;"></div>
           <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
-            <button onclick="closeProjectModal()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px 14px; font-size:0.82rem; cursor:pointer;">Annulla</button>
+            <button id="project-cancel-btn" onclick="closeProjectModal()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px 14px; font-size:0.82rem; cursor:pointer;">Annulla</button>
             <button id="project-save-btn" onclick="saveTargetProject()" style="background:#238636; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:0.82rem; font-weight:700; cursor:pointer;">✅ Imposta Progetto</button>
           </div>
         </div>
@@ -781,8 +781,8 @@
         <div style="padding: 12px 20px; background: #161b22; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
           <span id="ceo-report-status" style="font-size: 0.76rem; color: #3fb950;"></span>
           <div style="display: flex; gap: 8px;">
-            <button onclick="copyCeoReport()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:7px 13px; font-size:0.8rem; cursor:pointer;">📋 Copia Markdown</button>
-            <button onclick="openCeoReportModal(true)" style="background:#5865F2; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:0.8rem; font-weight:700; cursor:pointer;">📢 Pubblica su Discord</button>
+            <button id="ceo-copy-btn" onclick="copyCeoReport()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:7px 13px; font-size:0.8rem; cursor:pointer;">📋 Copia Markdown</button>
+            <button id="ceo-discord-btn" onclick="openCeoReportModal(true)" style="background:#5865F2; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:0.8rem; font-weight:700; cursor:pointer;">📢 Pubblica su Discord</button>
           </div>
         </div>
       </div>
@@ -821,7 +821,12 @@
           kanbanEmpty: 'Nessun task in questa colonna',
           projBtn: 'Progetto:',
           projModalTitle: 'Seleziona Progetto Target Operativo',
+          projModalDesc: 'Indica il percorso assoluto della cartella su cui vuoi far lavorare Alberto (CEO), Luigi, Gabri e Carlo (puoi cambiarlo anche da Discord con <code style="color:#58a6ff;">!project &lt;percorso&gt;</code>).',
+          projCancelBtn: 'Annulla',
           projSaveBtn: '✅ Imposta Progetto',
+          ceoModalTitle: 'Report Esecutivo CEO — AziendaAI',
+          ceoCopyBtn: '📋 Copia Markdown',
+          ceoDiscordBtn: '📢 Pubblica su Discord',
           chipReport: '📊 Report CEO',
           standupHeader: '📢 RIUNIONE GENERALE (STANDUP MEETING)',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri e Carlo raggiungono la scrivania di Alberto...',
@@ -862,7 +867,12 @@
           kanbanEmpty: 'No tasks in this column',
           projBtn: 'Workspace:',
           projModalTitle: 'Select Target Project Workspace',
+          projModalDesc: 'Specify the absolute folder path where Alberto (CEO), Luigi, Gabri, and Carlo should work (you can also change it from Discord using <code style="color:#58a6ff;">!project &lt;path&gt;</code>).',
+          projCancelBtn: 'Cancel',
           projSaveBtn: '✅ Set Workspace',
+          ceoModalTitle: 'CEO Executive Report — AziendaAI',
+          ceoCopyBtn: '📋 Copy Markdown',
+          ceoDiscordBtn: '📢 Post to Discord',
           chipReport: '📊 CEO Report',
           standupHeader: '📢 ALL-HANDS STANDUP MEETING',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri & Carlo are gathering at Alberto\'s desk...',
@@ -894,7 +904,7 @@
         const c3 = document.getElementById('chip-audit'); if (c3) c3.textContent = t.chipAudit;
         const c4 = document.getElementById('chip-perm'); if (c4) c4.textContent = t.chipPerm;
         const c5 = document.getElementById('chip-walk'); if (c5) c5.textContent = t.chipWalk;
-        const c6 = document.getElementById('chip-lounge'); if (c6) c6.textContent = isLoungeBreakActive ? t.chipLoungeOn : t.chipLoungeOff;
+        const c6 = document.getElementById('chip-lounge'); if (c6) c6.textContent = (agentOnSofa && agentOnSofa[selectedId]) ? t.chipLoungeOn : t.chipLoungeOff;
         const c7 = document.getElementById('chip-standup'); if (c7) c7.textContent = t.chipStandup;
         const c8 = document.getElementById('chip-report'); if (c8) c8.textContent = t.chipReport;
         const kbBtn = document.getElementById('label-kanban-btn'); if (kbBtn) kbBtn.textContent = t.kanbanBtn;
@@ -905,7 +915,12 @@
         const kbC3 = document.getElementById('kanban-col-done-title'); if (kbC3) kbC3.textContent = t.kanbanColDone;
         const prjB = document.getElementById('label-project-btn'); if (prjB) prjB.textContent = t.projBtn;
         const prjT = document.getElementById('project-modal-title'); if (prjT) prjT.textContent = t.projModalTitle;
+        const prjD = document.getElementById('project-modal-desc'); if (prjD) prjD.innerHTML = t.projModalDesc;
+        const prjC = document.getElementById('project-cancel-btn'); if (prjC) prjC.textContent = t.projCancelBtn;
         const prjS = document.getElementById('project-save-btn'); if (prjS) prjS.textContent = t.projSaveBtn;
+        const ceoT = document.getElementById('ceo-report-modal-title'); if (ceoT) ceoT.textContent = t.ceoModalTitle;
+        const ceoC = document.getElementById('ceo-copy-btn'); if (ceoC) ceoC.textContent = t.ceoCopyBtn;
+        const ceoD = document.getElementById('ceo-discord-btn'); if (ceoD) ceoD.textContent = t.ceoDiscordBtn;
         const inp = document.getElementById('task-input'); if (inp) inp.placeholder = t.inputPh;
         const sBtn = document.getElementById('send-task-btn'); if (sBtn) sBtn.textContent = t.sendBtn;
         [10, 6, 7, 8].forEach(id => {
@@ -949,6 +964,9 @@
         7:  { used: 0, max: 200000 },
         8:  { used: 0, max: 200000 }
       };
+      const agentOnSofa = { 10: false, 6: false, 7: false, 8: false };
+      const agentWorking = { 10: false, 6: false, 7: false, 8: false };
+      const agentLastActiveAt = { 10: Date.now(), 6: Date.now(), 7: Date.now(), 8: Date.now() };
 
       const teamPills = document.getElementById('team-pills');
       const drawerName = document.getElementById('drawer-agent-name');
@@ -1036,7 +1054,7 @@
           const pill = document.createElement('div');
           const hasPerm = !!activePermissions[a.id];
           pill.className = `agent-pill ${a.id === selectedId ? 'active' : ''}`;
-          pill.innerHTML = `<span class="dot" style="${hasPerm ? 'background:#e3b341; box-shadow:0 0 8px #e3b341;' : ''}"></span><span>${a.name} ${hasPerm ? '⚠️' : ''}</span>`;
+          pill.innerHTML = `<span class="dot" style="${hasPerm ? 'background:#e3b341; box-shadow:0 0 8px #e3b341;' : ''}"></span><span>${escapeHtml(a.name)} ${hasPerm ? '⚠️' : ''}</span>`;
           pill.onclick = () => selectAgent(a.id, true);
           teamPills.appendChild(pill);
         });
@@ -1130,6 +1148,7 @@
 
         updateStatusDisplay(selectedId);
         renderPermissionBox();
+        updateLoungeChipUI();
 
         drawerLogs.innerHTML = '';
         const list = agentLogs[selectedId] || [];
@@ -1205,15 +1224,20 @@
       }
 
       function escapeHtml(str) {
-        return (str || '')
+        return String(str ?? '')
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
       }
 
       function sendTask() {
         const text = taskInput.value.trim();
         if (!text) return;
+        agentWorking[selectedId] = true;
+        agentLastActiveAt[selectedId] = Date.now();
+        setAgentLounge(selectedId, false, false);
         const time = new Date().toLocaleTimeString();
         appendLog(selectedId, `[${time}] Task inoltrato: "${text}"`, 'task');
         agentStatuses[selectedId] = `⚡ Task: ${text}`;
@@ -1340,6 +1364,11 @@
           // Inizio esecuzione tool o comando
           if (msg.type === 'agentToolStart') {
             const targetId = Number(msg.id || msg.agentId || 10);
+            agentWorking[targetId] = true;
+            agentLastActiveAt[targetId] = Date.now();
+            if (agentOnSofa[targetId]) {
+              setAgentLounge(targetId, false);
+            }
             const desc = msg.status || (msg.toolName ? ('Eseguo: ' + msg.toolName) : 'Comando in esecuzione');
             agentStatuses[targetId] = `⚡ ${desc}`;
             updateStatusDisplay(targetId);
@@ -1349,6 +1378,11 @@
           // Attività o log dettagliato
           if (msg.type === 'agentActivity') {
             const targetId = Number(msg.agentId || msg.id || 10);
+            agentWorking[targetId] = true;
+            agentLastActiveAt[targetId] = Date.now();
+            if (agentOnSofa[targetId]) {
+              setAgentLounge(targetId, false);
+            }
             if (msg.status) {
               agentStatuses[targetId] = `⚡ ${msg.status}`;
               updateStatusDisplay(targetId);
@@ -1361,6 +1395,8 @@
           // Completamento tool o attesa
           if (msg.type === 'agentStatus' && msg.status === 'waiting') {
             const targetId = Number(msg.id || msg.agentId || 10);
+            agentWorking[targetId] = false;
+            agentLastActiveAt[targetId] = Date.now();
             agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
             updateStatusDisplay(targetId);
             appendLog(targetId, `[${time}] ✔ Operazione completata. In attesa di nuove istruzioni.`, 'done');
@@ -1368,17 +1404,27 @@
 
           if (msg.type === 'agentToolsClear') {
             const targetId = Number(msg.id || msg.agentId || 10);
+            agentWorking[targetId] = false;
+            agentLastActiveAt[targetId] = Date.now();
             agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
             updateStatusDisplay(targetId);
           }
 
           // Instradamento fisico: un agente (es. Alberto CEO) cammina verso un sottoposto e mostra il popup "Message from Parent Agent"
           if (msg.type === 'agentDelegation') {
+            const fId = Number(msg.fromAgentId || 10);
+            const tId = Number(msg.toAgentId || 6);
+            agentWorking[fId] = true;
+            agentWorking[tId] = true;
+            agentLastActiveAt[fId] = Date.now();
+            agentLastActiveAt[tId] = Date.now();
+            if (agentOnSofa[fId]) setAgentLounge(fId, false);
+            if (agentOnSofa[tId]) setAgentLounge(tId, false);
+
             playRetroSound(Number(msg.toAgentId) === 10 ? 'complete' : 'delegation');
-            if (isLoungeBreakActive) setLoungeBreak(false, false);
             triggerAgentDelegationWalk(
-              Number(msg.fromAgentId || 10),
-              Number(msg.toAgentId || 6),
+              fId,
+              tId,
               msg.fromName || 'Alberto (CEO)',
               msg.toName || 'Luigi (Backend)',
               msg.message || 'Nuovo task operativo assegnato.'
@@ -1388,7 +1434,10 @@
           // Pausa Caffè / Divano in Sala Relax (Automatica su Rest / Inattività o Manuale)
           if (msg.type === 'loungeBreakState') {
             playRetroSound('lounge');
-            setLoungeBreak(Boolean(msg.active), false);
+            const targetIds = (Array.isArray(msg.agentIds) && msg.agentIds.length > 0)
+              ? msg.agentIds
+              : (msg.agentId ? [Number(msg.agentId)] : null);
+            setLoungeBreak(Boolean(msg.active), false, targetIds);
           }
           if (msg.type === 'agentModeChange' && msg.mode) {
             playRetroSound('lounge');
@@ -1559,38 +1608,61 @@
       };
       let isLoungeBreakActive = false;
       let lastTeamActivityAt = Date.now();
+      const agentOnSofa = { 10: false, 6: false, 7: false, 8: false };
+      const agentWorking = { 10: false, 6: false, 7: false, 8: false };
+      const agentLastActiveAt = { 10: Date.now(), 6: Date.now(), 7: Date.now(), 8: Date.now() };
 
-      function setLoungeBreak(active, broadcastToServer = true) {
+      function setAgentLounge(agentId, onSofa) {
+        const id = Number(agentId);
         const office = window.__officeState;
         if (!office || !office.characters || typeof office.reassignSeat !== 'function') return;
-        if (isLoungeBreakActive === active) return;
-        isLoungeBreakActive = active;
+        if (agentOnSofa[id] === onSofa) return;
+        agentOnSofa[id] = onSofa;
 
-        const t = I18N[appLang] || I18N.it;
-        const time = new Date().toLocaleTimeString();
-        const seatMap = active ? LOUNGE_SOFA_SEATS : WORK_DESK_SEATS;
-
-        // Libera prima i flag assigned sui sedili coinvolti per permettere reassignSeat pulito
+        const targetSeat = onSofa ? LOUNGE_SOFA_SEATS[id] : WORK_DESK_SEATS[id];
         if (office.seats) {
-          for (const sid of Object.values(WORK_DESK_SEATS)) {
-            const s = office.seats.get(sid); if (s) s.assigned = false;
-          }
-          for (const sid of Object.values(LOUNGE_SOFA_SEATS)) {
-            const s = office.seats.get(sid); if (s) s.assigned = false;
-          }
+          const dSeat = office.seats.get(WORK_DESK_SEATS[id]); if (dSeat) dSeat.assigned = false;
+          const sSeat = office.seats.get(LOUNGE_SOFA_SEATS[id]); if (sSeat) sSeat.assigned = false;
         }
 
-        TEAM.forEach(a => {
-          const targetSeat = seatMap[a.id];
-          if (targetSeat) {
-            office.reassignSeat(a.id, targetSeat);
-            if (active && typeof office.showWaitingBubble === 'function') {
-              setTimeout(() => { try { office.showWaitingBubble(a.id, false); } catch {} }, 2500);
-            }
+        if (targetSeat) {
+          office.reassignSeat(id, targetSeat);
+          if (onSofa && typeof office.showWaitingBubble === 'function') {
+            setTimeout(() => { try { office.showWaitingBubble(id, false); } catch {} }, 2500);
           }
-          appendLog(a.id, `[${time}] ${active ? t.loungeEnterLog : t.loungeExitLog}`, active ? 'perm-warn' : 'done');
-        });
+        }
+        const t = I18N[appLang] || I18N.it;
+        const time = new Date().toLocaleTimeString();
+        appendLog(id, `[${time}] ${onSofa ? t.loungeEnterLog : t.loungeExitLog}`, onSofa ? 'perm-warn' : 'done');
+      }
 
+      function setLoungeBreak(active, broadcastToServer = true, targetAgentIds = null) {
+        const office = window.__officeState;
+        if (!office || !office.characters || typeof office.reassignSeat !== 'function') return;
+
+        if (active) {
+          // Se si attiva la pausa, vanno sul divano SOLO gli agenti inattivi (Idle, non working)
+          const candidates = (Array.isArray(targetAgentIds) && targetAgentIds.length > 0)
+            ? targetAgentIds
+            : TEAM.map(a => a.id).filter(id => !agentWorking[id]);
+
+          candidates.forEach(id => {
+            if (!agentWorking[id]) {
+              setAgentLounge(id, true);
+            }
+          });
+        } else {
+          // Se si disattiva o torna un task, tornano alle scrivanie
+          const candidates = (Array.isArray(targetAgentIds) && targetAgentIds.length > 0)
+            ? targetAgentIds
+            : TEAM.map(a => a.id);
+
+          candidates.forEach(id => {
+            setAgentLounge(id, false);
+          });
+        }
+
+        isLoungeBreakActive = Object.values(agentOnSofa).some(v => v === true);
         applyLanguage();
         if (broadcastToServer && ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'toggleLoungeBreak', active }));
