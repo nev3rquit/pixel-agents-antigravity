@@ -52,7 +52,15 @@ Nella barra laterale destra (**Drawer Operativo**) hai sempre sotto controllo:
   - `🤖 Quota Gemini (5h / Settimana)`: es. `93.2% (5h, reset 21:00) | 63.2% (sett.)`
   - `🧠 Quota Claude (5h / Settimana)`: es. `0.0% (5h, reset 19:50) | 49.8% (sett.)`
 - **Stream Live delle Azioni**: ogni tool invocato dall'agente (`run_command`, `edit_file`, `send_message`) e ogni risposta finale compaiono in diretta nella console dell'agente selezionato.
-- **Quick Actions & Input Diretto**: pulsanti rapidi (`🔍 Check Stato`, `🐙 Git Status`, `🛡️ Audit Sicurezza`, `🚶‍♂️ Test Delegacy Alberto→Luigi`) e barra di testo per assegnare task immediati.
+- **Quick Actions & Input Diretto**: pulsanti rapidi (`🔍 Check Stato`, `🐙 Git Status`, `🛡️ Audit Sicurezza`, `🚶‍♂️ Test Delegacy Alberto→Luigi`, `☕ Pausa Divano`, `📢 Convoca Riunione`, `📊 Report CEO`) e barra di testo per assegnare task immediati.
+
+### 2. Le 6 Innovazioni Esclusive della Sala Operativa
+- **☕ Pausa Caffè / Divano Fisica in Sala Relax (`☕ Pausa Divano`)**: Quando il team entra in modalità `rest` (quota 0%), resta inattivo per oltre 5 minuti o premi `☕ Pausa Divano`, tutti e 4 gli agenti si alzano dalle scrivanie, camminano nella sala relax a destra e si siedono sui 4 divani attorno al tavolino del caffè, tornando immediatamente ai PC appena arriva un nuovo task!
+- **📢 Riunione Generale / Standup Meeting (`📢 Convoca Riunione`)**: Chiama a raccolta Luigi (`6`), Gabri (`7`) e Carlo (`8`) attorno alla scrivania di Alberto (CEO, `10`) per un briefing di allineamento sprint con fumetto live.
+- **📋 Lavagna Kanban Operativa a 3 Colonne (`📋 Lavagna Task`)**: Clicca il pulsante nella Topbar per aprire la lavagna Kanban sincronizzata in tempo reale via WebSocket (`⏳ In Coda / Riposo`, `⚡ In Corso / Assegnati`, `✅ Completati`).
+- **📂 Selettore Progetto Target Multi-Workspace (`📂 Progetto: ...` & `!project <percorso>`)**: Cambia in qualsiasi momento la cartella/repository su cui lavorano Alberto, Luigi, Gabri e Carlo sia dalla Topbar Web sia da Discord (`!project C:\percorso\progetto`).
+- **🔊 Motore Audio Retro 8-Bit Sintetizzato (`🔊 / 🔇`)**: Sintetizzatore chiptune WebAudio API (zero file esterni) con effetti sonori 8-bit dedicati per delega task, completamento, richiesta permessi, riunione standup e pausa divano.
+- **📊 Report Esecutivo CEO in 1-Click (`📊 Report CEO`)**: Genera istantaneamente un report direzionale in Markdown (progetto attivo, quote Gemini/Claude, stato del team, task Kanban completati e ultimi commit Git) copiabile o pubblicabile con 1 click in `#📢-sala-operativa` su Discord.
 
 ---
 

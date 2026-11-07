@@ -52,7 +52,15 @@ In the right-hand **Operations Drawer**, you get instant visibility into:
   - `🤖 Gemini Quota (5h / Weekly)`: e.g. `93.2% (5h, reset 21:00) | 63.2% (weekly)`
   - `🧠 Claude Quota (5h / Weekly)`: e.g. `0.0% (5h, reset 19:50) | 49.8% (weekly)`
 - **Live Action Stream**: Every tool call (`run_command`, `edit_file`, `send_message`) and final response streams live into the selected agent's console.
-- **Quick Actions & Direct Prompting**: One-click buttons (`🔍 Check Status`, `🐙 Git Status`, `🛡️ Security Audit`, `🚶‍♂️ Test Delegation Alberto→Luigi`) plus a direct task input bar.
+- **Quick Actions & Direct Prompting**: One-click buttons (`🔍 Check Status`, `🐙 Git Status`, `🛡️ Security Audit`, `🚶‍♂️ Test Delegation Alberto→Luigi`, `☕ Sofa Break`, `📢 Call Standup Meeting`, `📊 CEO Report`) plus a direct task input bar.
+
+### 2. Built-in Virtual Office Innovations
+- **☕ Physical Sofa / Coffee Break Mode (`☕ Sofa Break`)**: When the team enters `rest` mode (0% quota), stays inactive for >5 minutes, or when you click `☕ Sofa Break`, all 4 agents stand up from their desks, walk into the right-hand lounge room, and sit on the 4 sofas around the coffee table—automatically returning to their workstations the instant a new task arrives!
+- **📢 All-Hands Standup Meeting (`📢 Call Standup Meeting`)**: Summons Luigi (`6`), Gabri (`7`), and Carlo (`8`) to walk over and gather around Alberto (CEO, `10`)'s desk for a synchronized sprint alignment huddle with a live speech bubble.
+- **📋 Live 3-Column Kanban Task Board (`📋 Task Board`)**: Click the Topbar badge to open a real-time Kanban modal synced via WebSocket (`⏳ Queued / Rest`, `⚡ In Progress / Dispatched`, `✅ Completed`).
+- **📂 Multi-Workspace Target Project Switcher (`📂 Workspace: ...` & `!project <path>`)**: Switch the active target directory from the Web Topbar or from Discord (`!project C:\path\to\repo`) so your team can work on any codebase on your machine.
+- **🔊 Synthesized 8-Bit Retro Audio Engine (`🔊 / 🔇`)**: Zero-dependency WebAudio API chiptune synthesizer playing subtle 8-bit chimes on task delegation, completion, permission alerts, standup meetings, and sofa breaks.
+- **📊 1-Click CEO Executive Report (`📊 CEO Report`)**: Generates a full Markdown executive summary (active workspace, Gemini/Claude quotas, team status, Kanban stats, and latest Git commits) with 1-click copy or direct broadcast to `#📢-sala-operativa` on Discord.
 
 ---
 
