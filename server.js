@@ -1030,7 +1030,7 @@ async function getLiveQuotaAndModels() {
           }, 1500);
         }
       }
-      try { sendDiscordAnnouncement(ann.t, ann.c); } catch {}
+      try { sendDiscordAnnouncement(ann.t, ann.c, tr.mode); } catch {}
       broadcast({ type: 'agentModeChange', mode: tr.mode, message: ann.t });
       isLoungeBreakActive = (tr.mode === 'rest');
       broadcast({ type: 'loungeBreakState', active: tr.mode === 'rest', reason: tr.mode === 'rest' ? 'quota_rest' : 'quota_resumed' });

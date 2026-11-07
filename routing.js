@@ -111,7 +111,9 @@ function updateMode({ g5h, c5h, cWeekly, resumeAt, geminiResetAt, claudeResetAt 
   state.resumeAt = next === 'rest' ? (resumeAt || state.resumeAt) : null;
   state.geminiResetAt = geminiResetAt || state.geminiResetAt;
   state.claudeResetAt = claudeResetAt || state.claudeResetAt;
-  return { mode: next, changed: next !== prev, prev: prev || 'init' };
+  // Emetti changed=true SOLO quando avviene un vero cambio di stato tra modelli/riposo (mai al primo avvio del server 'init')
+  const realChange = Boolean(prev && next !== prev);
+  return { mode: next, changed: realChange, prev: prev || 'init', isInit: !prev };
 }
 
 function getMode() { return state.mode || 'gemini'; }

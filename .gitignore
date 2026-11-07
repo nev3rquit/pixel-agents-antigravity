@@ -8,6 +8,7 @@ tests/
 *.tmp
 *.jsonl
 tasks_queue.json
+.last_announced_mode
 discord.config.json
 agents.config.json
 .pixel-agents/

@@ -1434,14 +1434,15 @@
           // Pausa Caffè / Divano in Sala Relax (Automatica su Rest / Inattività o Manuale)
           if (msg.type === 'loungeBreakState') {
             playRetroSound('lounge');
-            const targetIds = (Array.isArray(msg.agentIds) && msg.agentIds.length > 0)
-              ? msg.agentIds
-              : (msg.agentId ? [Number(msg.agentId)] : null);
-            setLoungeBreak(Boolean(msg.active), false, targetIds);
+            if (msg.agentId) {
+              setAgentLounge(Number(msg.agentId), Boolean(msg.active), Boolean(msg.force));
+            } else {
+              setLoungeBreak(Boolean(msg.active), false, Boolean(msg.forceAll));
+            }
           }
           if (msg.type === 'agentModeChange' && msg.mode) {
             playRetroSound('lounge');
-            setLoungeBreak(msg.mode === 'rest', false);
+            setLoungeBreak(msg.mode === 'rest', false, msg.mode === 'rest');
           }
 
           // Riunione Generale / Standup Meeting attorno alla scrivania di Alberto (CEO)
@@ -1608,16 +1609,28 @@
       };
       let isLoungeBreakActive = false;
       let lastTeamActivityAt = Date.now();
-      const agentOnSofa = { 10: false, 6: false, 7: false, 8: false };
-      const agentWorking = { 10: false, 6: false, 7: false, 8: false };
-      const agentLastActiveAt = { 10: Date.now(), 6: Date.now(), 7: Date.now(), 8: Date.now() };
 
-      function setAgentLounge(agentId, onSofa) {
+      function updateLoungeChipUI() {
+        const t = I18N[appLang] || I18N.it;
+        const c6 = document.getElementById('chip-lounge');
+        if (c6) {
+          c6.textContent = agentOnSofa[selectedId] ? t.chipLoungeOn : t.chipLoungeOff;
+        }
+      }
+
+      function setAgentLounge(agentId, onSofa, force = false) {
         const id = Number(agentId);
         const office = window.__officeState;
         if (!office || !office.characters || typeof office.reassignSeat !== 'function') return;
+
+        // Regola 2: Chi lavora DEVE RESTARE ALLA SCRIVANIA!
+        if (onSofa && agentWorking[id] && !force) {
+          return;
+        }
+
         if (agentOnSofa[id] === onSofa) return;
         agentOnSofa[id] = onSofa;
+        isLoungeBreakActive = Object.values(agentOnSofa).some(Boolean);
 
         const targetSeat = onSofa ? LOUNGE_SOFA_SEATS[id] : WORK_DESK_SEATS[id];
         if (office.seats) {
@@ -1634,51 +1647,48 @@
         const t = I18N[appLang] || I18N.it;
         const time = new Date().toLocaleTimeString();
         appendLog(id, `[${time}] ${onSofa ? t.loungeEnterLog : t.loungeExitLog}`, onSofa ? 'perm-warn' : 'done');
+        updateLoungeChipUI();
       }
 
-      function setLoungeBreak(active, broadcastToServer = true, targetAgentIds = null) {
+      function setLoungeBreak(active, broadcastToServer = true, forceAll = false) {
         const office = window.__officeState;
         if (!office || !office.characters || typeof office.reassignSeat !== 'function') return;
 
-        if (active) {
-          // Se si attiva la pausa, vanno sul divano SOLO gli agenti inattivi (Idle, non working)
-          const candidates = (Array.isArray(targetAgentIds) && targetAgentIds.length > 0)
-            ? targetAgentIds
-            : TEAM.map(a => a.id).filter(id => !agentWorking[id]);
-
-          candidates.forEach(id => {
-            if (!agentWorking[id]) {
-              setAgentLounge(id, true);
+        TEAM.forEach(a => {
+          if (active) {
+            // Regola 3: Vanno sul divano SOLO gli agenti inattivi (Idle, non working)
+            if (forceAll || !agentWorking[a.id]) {
+              setAgentLounge(a.id, true, forceAll);
             }
-          });
-        } else {
-          // Se si disattiva o torna un task, tornano alle scrivanie
-          const candidates = (Array.isArray(targetAgentIds) && targetAgentIds.length > 0)
-            ? targetAgentIds
-            : TEAM.map(a => a.id);
+          } else {
+            setAgentLounge(a.id, false, true);
+          }
+        });
 
-          candidates.forEach(id => {
-            setAgentLounge(id, false);
-          });
-        }
-
-        isLoungeBreakActive = Object.values(agentOnSofa).some(v => v === true);
-        applyLanguage();
+        isLoungeBreakActive = Object.values(agentOnSofa).some(Boolean);
+        updateLoungeChipUI();
         if (broadcastToServer && ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'toggleLoungeBreak', active }));
         }
       }
 
       window.toggleLoungeBreak = function() {
-        lastTeamActivityAt = Date.now();
-        setLoungeBreak(!isLoungeBreakActive, true);
+        agentLastActiveAt[selectedId] = Date.now();
+        const currentlyOnSofa = Boolean(agentOnSofa[selectedId]);
+        setAgentLounge(selectedId, !currentlyOnSofa);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'toggleLoungeBreak', agentId: selectedId, active: !currentlyOnSofa }));
+        }
       };
 
-      // Timer inattività automatica (>5 minuti senza task -> vanno a prendere il caffè sui divani)
+      // Timer inattività automatica per singolo agente (>5 minuti senza task -> va sul divano se idle)
       setInterval(() => {
-        if (!isLoungeBreakActive && (Date.now() - lastTeamActivityAt > 5 * 60 * 1000)) {
-          setLoungeBreak(true, false);
-        }
+        const now = Date.now();
+        [10, 6, 7, 8].forEach(id => {
+          if (!agentWorking[id] && !agentOnSofa[id] && (now - (agentLastActiveAt[id] || 0) > 5 * 60 * 1000)) {
+            setAgentLounge(id, true);
+          }
+        });
       }, 15000);
 
       // =========================================================================
@@ -1694,7 +1704,7 @@
       function startStandupAnimation(topicText, notifyWs = true) {
         const office = window.__officeState;
         if (!office || !office.characters) return;
-        if (isLoungeBreakActive) setLoungeBreak(false, false);
+        if (isLoungeBreakActive) setLoungeBreak(false, false, true);
 
         const t = I18N[appLang] || I18N.it;
         const topic = topicText || (appLang === 'it'

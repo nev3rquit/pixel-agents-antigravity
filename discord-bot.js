@@ -319,9 +319,31 @@ async function updateDiscordUsageMonitor(quotaData) {
   }
 }
 
-// Annuncio di transizione di stato in #sala-operativa (con coda se il client non è ancora pronto)
+// Annuncio di transizione di stato in #sala-operativa (con coda se il client non è ancora pronto e deduplica su disco per non ripetere mai lo stesso stato ai riavvii)
 const pendingAnnouncements = [];
-async function sendDiscordAnnouncement(text, color) {
+const LAST_MODE_FILE = path.join(__dirname, '.last_announced_mode');
+
+function getLastAnnouncedMode() {
+  try {
+    if (fs.existsSync(LAST_MODE_FILE)) {
+      return fs.readFileSync(LAST_MODE_FILE, 'utf8').trim();
+    }
+  } catch {}
+  return '';
+}
+
+function setLastAnnouncedMode(modeKey) {
+  try {
+    if (modeKey) fs.writeFileSync(LAST_MODE_FILE, String(modeKey).trim(), 'utf8');
+  } catch {}
+}
+
+async function sendDiscordAnnouncement(text, color, modeKey = null) {
+  if (modeKey) {
+    const lastKey = getLastAnnouncedMode();
+    if (lastKey === modeKey) return; // Già annunciato questo stato, non inviare duplicati!
+    setLastAnnouncedMode(modeKey);
+  }
   if (!client || !client.isReady()) {
     pendingAnnouncements.push({ text, color });
     return;
