@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AziendaAI Office — Sala Operativa Ufficiale</title>
+    <link rel="icon" type="image/png" href="./icons/icon-256.png?v=2" />
+    <link rel="stylesheet" crossorigin href="./assets/index-B4KUBY28.css" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background-color: #0b0e14;
+        color: #e6edf3;
+        font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+      /* HEADER TOP BAR AZIENDALE */
+      header {
+        background: #161b22;
+        border-bottom: 2px solid #30363d;
+        padding: 8px 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 1000;
+        height: 52px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .brand h1 {
+        font-size: 1.1rem;
+        letter-spacing: 0.5px;
+        color: #58a6ff;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .badge {
+        background: #238636;
+        color: #ffffff;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+      }
+      .team-bar {
+        display: flex;
+        gap: 8px;
+      }
+      .agent-pill {
+        background: #21262d;
+        border: 1px solid #30363d;
+        padding: 4px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.82rem;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+      }
+      .agent-pill:hover, .agent-pill.active {
+        background: #388bfd26;
+        border-color: #58a6ff;
+        color: #58a6ff;
+        transform: translateY(-1px);
+      }
+      .agent-pill .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #3fb950;
+        box-shadow: 0 0 6px #3fb950;
+      }
+
+      /* MAIN APP LAYOUT */
+      .app-layout {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      /* CONTENITORE STANZA PIXEL AGENTS */
+      #office-frame-container {
+        flex: 1;
+        position: relative;
+        background: #1e1e2e;
+        overflow: hidden;
+        height: 100%;
+        width: 100%;
+        display: flex;
+      }
+      #root {
+        width: 100% !important;
+        height: 100% !important;
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      #root > div {
+        width: 100% !important;
+        height: 100% !important;
+      }
+      canvas {
+        display: block !important;
+      }
+      /* NASCONDE COMPLETAMENTE LA TENDINA TERMINALE NATIVA DI PIXEL AGENTS */
+      [data-testid="launch-drawer"],
+      .xterm,
+      .xterm-viewport,
+      .terminal-drawer,
+      div:has(> .xterm) {
+        display: none !important;
+      }
+
+      /* TOOLTIP / BADGE CON IL NOME DELL'AGENTE VISIBILE SOLO IN HOVER / SELEZIONE */
+      div[data-testid="agent-overlay"] .pixel-panel {
+        display: flex !important;
+        background: rgba(22, 27, 34, 0.95) !important;
+        border: 1px solid #58a6ff !important;
+        border-radius: 6px !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+        padding: 5px 12px !important;
+        pointer-events: none !important;
+      }
+
+      /* MONITOR TOKEN & CONTEXT GAUGE */
+      .token-monitor {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin: 0 16px 10px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .token-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.78rem;
+        color: #8b949e;
+      }
+      .token-bar-track {
+        width: 100%;
+        height: 6px;
+        background: #21262d;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .token-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: #2ea043;
+        transition: width 0.4s ease, background 0.4s ease;
+      }
+
+      /* DISCORD WEBHOOK STATUS BADGE */
+      .discord-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.74rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: #5865f21a;
+        color: #5865f2;
+        border: 1px solid #5865f24d;
+        cursor: pointer;
+      }
+      .discord-badge:hover {
+        background: #5865f233;
+      }
+
+      /* DRAWER / CONSOLE LATERALE AGENTE */
+      #agent-drawer {
+        width: 480px;
+        background: #161b22;
+        border-left: 2px solid #30363d;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        z-index: 900;
+        box-shadow: -4px 0 16px rgba(0,0,0,0.4);
+      }
+      .drawer-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #30363d;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        background: #0d1117;
+      }
+      .drawer-title {
+        font-weight: bold;
+        font-size: 1.25rem;
+        color: #58a6ff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .drawer-desc {
+        font-size: 0.9rem;
+        color: #8b949e;
+        margin-top: 4px;
+      }
+
+      /* BANNER LIVE STATUS SOTTO IL NOME NEL TERMINALE */
+      .drawer-live-status {
+        margin-top: 8px;
+        font-size: 0.86rem;
+        color: #58a6ff;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #161b22;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #30363d;
+        max-width: 360px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transition: all 0.25s ease;
+      }
+      .drawer-live-status .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #3fb950;
+        box-shadow: 0 0 6px #3fb950;
+        flex-shrink: 0;
+      }
+      .drawer-live-status.active {
+        color: #e3b341;
+        border-color: #d29922;
+        background: rgba(210, 153, 34, 0.12);
+      }
+      .drawer-live-status.active .status-dot {
+        background: #e3b341;
+        box-shadow: 0 0 8px #e3b341;
+        animation: pulseStatus 1.5s infinite;
+      }
+      @keyframes pulseStatus {
+        0% { opacity: 0.35; transform: scale(0.9); }
+        50% { opacity: 1; transform: scale(1.15); }
+        100% { opacity: 0.35; transform: scale(0.9); }
+      }
+
+      /* BOX INTERATTIVO PERMISSION / APPROVAL */
+      .permission-card {
+        background: #1c1500;
+        border: 2px solid #d29922;
+        border-radius: 8px;
+        margin: 12px 16px;
+        padding: 14px;
+        box-shadow: 0 4px 16px rgba(210, 153, 34, 0.25);
+        animation: fadeInPerm 0.3s ease;
+      }
+      @keyframes fadeInPerm {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .permission-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .permission-badge {
+        background: #d29922;
+        color: #0b0e14;
+        font-weight: bold;
+        font-size: 0.76rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        letter-spacing: 0.5px;
+      }
+      .permission-time {
+        font-size: 0.78rem;
+        color: #8b949e;
+      }
+      .permission-body {
+        margin-bottom: 12px;
+      }
+      .permission-tool {
+        font-weight: bold;
+        color: #e3b341;
+        font-size: 0.92rem;
+        margin-bottom: 4px;
+      }
+      .permission-command {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        color: #79c0ff;
+        font-family: 'Consolas', monospace;
+        font-size: 0.88rem;
+        padding: 8px 10px;
+        border-radius: 6px;
+        word-break: break-all;
+        margin-bottom: 6px;
+        max-height: 80px;
+        overflow-y: auto;
+      }
+      .permission-desc {
+        font-size: 0.82rem;
+        color: #c9d1d9;
+      }
+      .permission-actions {
+        display: flex;
+        gap: 10px;
+      }
+      .perm-btn {
+        flex: 1;
+        padding: 9px 14px;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 0.88rem;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .perm-btn-approve {
+        background: #238636;
+        color: #ffffff;
+      }
+      .perm-btn-approve:hover {
+        background: #2ea043;
+        transform: translateY(-1px);
+      }
+      .perm-btn-reject {
+        background: #da3633;
+        color: #ffffff;
+      }
+      .perm-btn-reject:hover {
+        background: #f85149;
+        transform: translateY(-1px);
+      }
+
+      .logs-container {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 16px;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 0.92rem;
+        background: #0d1117;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        scroll-behavior: smooth;
+      }
+      .log-entry {
+        line-height: 1.5;
+        color: #c9d1d9;
+        word-break: break-all;
+        padding: 8px 12px;
+        background: #161b22;
+        border-left: 4px solid #30363d;
+        border-radius: 0 6px 6px 0;
+      }
+      .log-entry.activity {
+        border-left-color: #3fb950;
+        color: #7ee787;
+        background: #2386361a;
+      }
+      .log-entry.task {
+        border-left-color: #a371f7;
+        color: #d2a8ff;
+        background: #8957e51a;
+      }
+      .log-entry.perm-warn {
+        border-left-color: #d29922;
+        color: #e3b341;
+        background: rgba(210, 153, 34, 0.15);
+      }
+      .log-entry.done {
+        border-left-color: #58a6ff;
+        color: #79c0ff;
+        background: #388bfd1a;
+      }
+      .log-entry.cmd-box {
+        border-left: 3px solid #388bfd;
+        background: #11151c;
+        padding: 8px 12px;
+        border-radius: 0 6px 6px 0;
+      }
+      .cmd-res-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+        font-size: 0.78rem;
+        color: #79c0ff;
+        font-weight: 500;
+      }
+      .cmd-code {
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 0.70rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+      .cmd-code.success {
+        background: rgba(35, 134, 54, 0.3);
+        color: #7ee787;
+        border: 1px solid rgba(46, 160, 67, 0.4);
+      }
+      .cmd-code.err {
+        background: rgba(218, 54, 51, 0.3);
+        color: #f85149;
+        border: 1px solid rgba(248, 81, 73, 0.4);
+      }
+      .cmd-stdout {
+        background: #080c10;
+        border: 1px solid #21262d;
+        border-radius: 4px;
+        padding: 6px 8px;
+        color: #8b949e;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 0.74rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        max-height: 140px;
+        overflow-y: auto;
+        margin: 0;
+      }
+
+      /* COMANDI RAPIDI & TASK INPUT */
+      .quick-actions {
+        padding: 10px 14px;
+        background: #12161c;
+        border-top: 1px solid #30363d;
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+      .quick-chip {
+        background: #21262d;
+        border: 1px solid #30363d;
+        color: #c9d1d9;
+        font-size: 0.85rem;
+        font-weight: 500;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s;
+      }
+      .quick-chip:hover {
+        background: #388bfd33;
+        border-color: #58a6ff;
+        color: #58a6ff;
+      }
+      .command-bar {
+        padding: 14px;
+        background: #161b22;
+        border-top: 1px solid #30363d;
+        display: flex;
+        gap: 10px;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 10;
+      }
+      .command-bar input {
+        flex: 1;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        color: #e6edf3;
+        padding: 12px 14px;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .command-bar input:focus {
+        border-color: #58a6ff;
+      }
+      .command-bar button {
+        background: #238636;
+        color: #fff;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.95rem;
+        transition: background 0.2s;
+      }
+      .command-bar button:hover {
+        background: #2ea043;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TOP BAR ISTITUZIONALE AZIENDALE -->
+    <header>
+      <div class="brand">
+        <h1>🏢 AziendaAI Office</h1>
+        <span class="badge" id="topbar-live-badge">SALA OPERATIVA LIVE</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="team-bar" id="team-pills"></div>
+        <button id="lang-toggle-btn" onclick="toggleAppLang()" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">🇮🇹 IT</button>
+      </div>
+    </header>
+
+    <div class="app-layout">
+      <!-- MOTORE NATIVO PIXEL AGENTS: STANZA, ARREDI, FISICA E ANIMAZIONI -->
+      <div id="office-frame-container">
+        <div id="root"></div>
+      </div>
+
+      <!-- TENDINA / CONSOLE LATERALE DELL'AGENTE SELEZIONATO -->
+      <div id="agent-drawer">
+        <div class="drawer-header">
+          <div>
+            <div class="drawer-title">
+              <span id="drawer-agent-avatar">👔</span>
+              <span id="drawer-agent-name">Alberto (CEO)</span>
+            </div>
+            <div class="drawer-desc" id="drawer-agent-role">CEO & Orchestrator</div>
+            <!-- BANNER ATTIVITÀ SINCRONIZZATO CON L'HOVER TOOLTIP -->
+            <div class="drawer-live-status" id="drawer-agent-status">
+              <span class="status-dot"></span>
+              <span id="drawer-status-text">🟢 In attesa di istruzioni (Idle)</span>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <span class="badge" id="drawer-status-badge">ONLINE</span>
+            <span class="discord-badge" id="discord-status-badge" onclick="promptDiscordWebhook()">💬 Discord: OFF</span>
+          </div>
+        </div>
+
+        <!-- MONITOR CONSUMO TOKEN & MEMORIA CONTESTUALE -->
+        <div class="token-monitor" id="drawer-token-monitor">
+          <div class="token-header">
+            <span>🧠 Modello: <strong id="agent-model-name" style="color:#58a6ff;">Gemini 3.8 Flash (Low)</strong> <span id="agent-who-badge" class="badge" style="background:#58a6ff;color:#0d1117;">Gemini</span></span>
+            <span id="token-usage-text" style="display:none;"></span>
+          </div>
+          <div style="display:none;">
+            <div class="token-bar-track">
+              <div class="token-bar-fill" id="token-bar-fill" style="width: 0%;"></div>
+            </div>
+            <strong id="agent-remaining-quota"></strong>
+          </div>
+          <!-- QUOTE GLOBALI ANTIGRAVITY (LIVE RPC) -->
+          <div style="margin-top:8px; padding-top:6px; border-top:1px dashed #30363d; display:flex; flex-direction:column; gap:4px; font-size:0.72rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span id="label-gemini-quota" style="color:#8b949e;">🤖 Quota Gemini (5h / Settimana):</span>
+              <strong id="global-gemini-quota" style="color:#58a6ff;">-- / --</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span id="label-claude-quota" style="color:#8b949e;">🧠 Quota Claude (5h / Settimana):</span>
+              <strong id="global-claude-quota" style="color:#3fb950;">-- / --</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- COMPONENTE DIALOG AUTORIZZAZIONE / PERMISSION (FASE 2) -->
+        <div id="drawer-permission-box" class="permission-card" style="display: none;">
+          <div class="permission-header">
+            <span class="permission-badge" id="label-perm-badge">⚠️ AUTORIZZAZIONE RICHIESTA</span>
+            <span class="permission-time" id="perm-time">12:30</span>
+          </div>
+          <div class="permission-body">
+            <div class="permission-tool" id="perm-tool">Tool: run_command</div>
+            <div class="permission-command" id="perm-command">git push origin main</div>
+            <div class="permission-desc" id="perm-desc">L'agente richiede conferma prima di eseguire questa operazione.</div>
+          </div>
+          <div class="permission-actions">
+            <button class="perm-btn perm-btn-approve" id="btn-perm-approve" onclick="respondPermission(true)">✅ Autorizza</button>
+            <button class="perm-btn perm-btn-reject" id="btn-perm-reject" onclick="respondPermission(false)">❌ Rifiuta</button>
+          </div>
+        </div>
+
+        <div class="logs-container" id="drawer-logs"></div>
+
+        <div class="quick-actions">
+          <button class="quick-chip" id="chip-check" onclick="quickTask(appLang === 'it' ? 'Esegui check di integrità e stato del codice' : 'Run code integrity and status check')">🔍 Check Stato</button>
+          <button class="quick-chip" id="chip-git" onclick="quickTask(appLang === 'it' ? 'Esegui git status e verifica modifiche' : 'Run git status and check changes')">🐙 Git Status</button>
+          <button class="quick-chip" id="chip-audit" onclick="quickTask(appLang === 'it' ? 'Avvia test di sicurezza e QA' : 'Run security and QA audit')">🛡️ Audit Sicurezza</button>
+          <button class="quick-chip" id="chip-perm" style="border-color:#d29922; color:#e3b341;" onclick="simulatePermissionRequest()">⚠️ Test Autorizzazione</button>
+          <button class="quick-chip" id="chip-walk" style="border-color:#58a6ff; color:#58a6ff;" onclick="simulateDelegationWalk()">🚶‍♂️ Test Delegacy Alberto→Luigi</button>
+        </div>
+
+        <div class="command-bar">
+          <input type="text" id="task-input" placeholder="Assegna un'istruzione a questo agente..." />
+          <button id="send-task-btn">Invia Task</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPUP MESSAGE FROM PARENT AGENT (SUL CANVAS IN CORRISPONDENZA DEGLI AGENTI) -->
+    <div id="parent-message-popup" style="
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      max-width: 310px;
+      min-width: 220px;
+      background: rgba(13, 17, 23, 0.96);
+      border: 2px solid #58a6ff;
+      border-radius: 10px;
+      padding: 10px 13px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 14px rgba(88, 166, 255, 0.35);
+      color: #e6edf3;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      transition: opacity 0.25s ease;
+    ">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; border-bottom:1px solid #30363d; padding-bottom:4px;">
+        <span style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#58a6ff;">📨 Message from Parent Agent</span>
+        <span id="parent-popup-badge" style="font-size:0.66rem; background:#1f6feb; color:#fff; padding:1px 6px; border-radius:99px; font-weight:600;">Alberto ➔ Luigi</span>
+      </div>
+      <div id="parent-popup-text" style="font-size:0.78rem; line-height:1.35; color:#f0f6fc; word-break:break-word; max-height:95px; overflow:hidden;"></div>
+      <div id="parent-popup-step" style="font-size:0.68rem; color:#8b949e; margin-top:5px; font-style:italic;">🚶‍♂️ In cammino verso la postazione...</div>
+    </div>
+
+    <!-- SCRIPT BRIDGE PER SINCRONIZZARE TOPBAR, TENDINA E MOTORE CANVAS -->
+    <script>
+      // =========================================================================
+      // SISTEMA AUTOMATICO BILINGUE IT / EN (Per te in Italiano, per utenti esteri in Inglese)
+      // =========================================================================
+      let appLang = localStorage.getItem('aziendaai_lang') || ((navigator.language || 'it').toLowerCase().startsWith('it') ? 'it' : 'en');
+      const I18N = {
+        it: {
+          liveBadge: 'SALA OPERATIVA LIVE',
+          idle: 'In attesa di istruzioni (Idle)',
+          geminiQuota: '🤖 Quota Gemini (5h / Settimana):',
+          claudeQuota: '🧠 Quota Claude (5h / Settimana):',
+          weeklyShort: 'sett.',
+          permReq: '⚠️ AUTORIZZAZIONE RICHIESTA',
+          approve: '✅ Autorizza',
+          reject: '❌ Rifiuta',
+          chipCheck: '🔍 Check Stato',
+          chipGit: '🐙 Git Status',
+          chipAudit: '🛡️ Audit Sicurezza',
+          chipPerm: '⚠️ Test Autorizzazione',
+          chipWalk: '🚶‍♂️ Test Delegacy Alberto→Luigi',
+          inputPh: "Assegna un'istruzione a questo agente...",
+          sendBtn: 'Invia Task',
+          walkLog: (to, msg) => `🚶‍♂️ Cammina verso ${to} per assegnare: "${msg}"`,
+          walkStep: (from, to) => `🚶‍♂️ ${from} sta andando da ${to}...`,
+          talkStep: (from, to) => `💬 ${from} consegna il messaggio a ${to}`,
+          returnStep: (from) => `↩️ Consegnato! ${from} torna alla scrivania...`
+        },
+        en: {
+          liveBadge: 'LIVE OPERATIONS ROOM',
+          idle: 'Waiting for instructions (Idle)',
+          geminiQuota: '🤖 Gemini Quota (5h / Weekly):',
+          claudeQuota: '🧠 Claude Quota (5h / Weekly):',
+          weeklyShort: 'weekly',
+          permReq: '⚠️ PERMISSION REQUIRED',
+          approve: '✅ Approve',
+          reject: '❌ Reject',
+          chipCheck: '🔍 Status Check',
+          chipGit: '🐙 Git Status',
+          chipAudit: '🛡️ Security Audit',
+          chipPerm: '⚠️ Test Permission',
+          chipWalk: '🚶‍♂️ Test Delegation Alberto→Luigi',
+          inputPh: 'Assign a task or instruction to this agent...',
+          sendBtn: 'Send Task',
+          walkLog: (to, msg) => `🚶‍♂️ Walking to ${to} to deliver: "${msg}"`,
+          walkStep: (from, to) => `🚶‍♂️ ${from} is walking to ${to}...`,
+          talkStep: (from, to) => `💬 ${from} delivers message to ${to}`,
+          returnStep: (from) => `↩️ Delivered! ${from} is returning to desk...`
+        }
+      };
+
+      function applyLanguage() {
+        const t = I18N[appLang] || I18N.it;
+        const btn = document.getElementById('lang-toggle-btn');
+        if (btn) btn.textContent = appLang === 'it' ? '🇮🇹 IT' : '🇬🇧 EN';
+        const lb = document.getElementById('topbar-live-badge'); if (lb) lb.textContent = t.liveBadge;
+        const lGem = document.getElementById('label-gemini-quota'); if (lGem) lGem.textContent = t.geminiQuota;
+        const lCla = document.getElementById('label-claude-quota'); if (lCla) lCla.textContent = t.claudeQuota;
+        const lPerm = document.getElementById('label-perm-badge'); if (lPerm) lPerm.textContent = t.permReq;
+        const bApp = document.getElementById('btn-perm-approve'); if (bApp) bApp.textContent = t.approve;
+        const bRej = document.getElementById('btn-perm-reject'); if (bRej) bRej.textContent = t.reject;
+        const c1 = document.getElementById('chip-check'); if (c1) c1.textContent = t.chipCheck;
+        const c2 = document.getElementById('chip-git'); if (c2) c2.textContent = t.chipGit;
+        const c3 = document.getElementById('chip-audit'); if (c3) c3.textContent = t.chipAudit;
+        const c4 = document.getElementById('chip-perm'); if (c4) c4.textContent = t.chipPerm;
+        const c5 = document.getElementById('chip-walk'); if (c5) c5.textContent = t.chipWalk;
+        const inp = document.getElementById('task-input'); if (inp) inp.placeholder = t.inputPh;
+        const sBtn = document.getElementById('send-task-btn'); if (sBtn) sBtn.textContent = t.sendBtn;
+        [10, 6, 7, 8].forEach(id => {
+          if (!agentStatuses[id] || agentStatuses[id].includes('Idle')) {
+            agentStatuses[id] = t.idle;
+          }
+        });
+        updateStatusDisplay(selectedId);
+      }
+
+      window.toggleAppLang = function() {
+        appLang = appLang === 'it' ? 'en' : 'it';
+        localStorage.setItem('aziendaai_lang', appLang);
+        applyLanguage();
+      };
+
+      let TEAM = [
+        { id: 10, name: 'Alberto (CEO)', role: 'CEO & Orchestrator', avatar: '👔', palette: 3 },
+        { id: 6,  name: 'Luigi (Backend)', role: 'Backend & Systems Engineer', avatar: '⚙️', palette: 0 },
+        { id: 7,  name: 'Gabri (Frontend)', role: 'Frontend Architect & UI Dev', avatar: '🎨', palette: 2 },
+        { id: 8,  name: 'Carlo (QA)', role: 'Security Auditor & Code Revisor', avatar: '🛡️', palette: 5 }
+      ];
+
+      let selectedId = 10;
+      const agentLogs = { 10: [], 6: [], 7: [], 8: [] };
+      const agentStatuses = {
+        10: 'In attesa di istruzioni (Idle)',
+        6:  'In attesa di istruzioni (Idle)',
+        7:  'In attesa di istruzioni (Idle)',
+        8:  'In attesa di istruzioni (Idle)'
+      };
+      const activePermissions = {
+        10: null,
+        6:  null,
+        7:  null,
+        8:  null
+      };
+      const agentTokens = {
+        10: { used: 0, max: 200000 },
+        6:  { used: 0, max: 200000 },
+        7:  { used: 0, max: 200000 },
+        8:  { used: 0, max: 200000 }
+      };
+
+      const teamPills = document.getElementById('team-pills');
+      const drawerName = document.getElementById('drawer-agent-name');
+      const drawerRole = document.getElementById('drawer-agent-role');
+      const drawerAvatar = document.getElementById('drawer-agent-avatar');
+      const drawerStatusBadge = document.getElementById('drawer-status-badge');
+      const discordStatusBadge = document.getElementById('discord-status-badge');
+      const drawerLiveStatus = document.getElementById('drawer-agent-status');
+      const drawerStatusText = document.getElementById('drawer-status-text');
+      const tokenUsageText = document.getElementById('token-usage-text');
+      const tokenBarFill = document.getElementById('token-bar-fill');
+      const agentRemainingQuota = document.getElementById('agent-remaining-quota');
+      const agentModelName = document.getElementById('agent-model-name');
+      const globalGeminiQuota = document.getElementById('global-gemini-quota');
+      const globalClaudeQuota = document.getElementById('global-claude-quota');
+
+      let liveGlobalQuota = null;
+
+      function updateTokenDisplay(id) {
+        if (id !== selectedId) return;
+        const tok = agentTokens[id] || { used: 0, max: 200000 };
+        const usedK = (tok.used / 1000).toFixed(1);
+        const maxK = (tok.max / 1000).toFixed(0);
+        const pct = Math.min(100, Math.round((tok.used / tok.max) * 100));
+        const remainingPct = Math.max(0, 100 - pct);
+        
+        tokenUsageText.textContent = `${usedK}k / ${maxK}k (${pct}%)`;
+        tokenBarFill.style.width = `${pct}%`;
+        if (agentRemainingQuota) {
+          agentRemainingQuota.textContent = `${remainingPct}% rimanente`;
+          agentRemainingQuota.style.color = remainingPct > 40 ? '#3fb950' : (remainingPct > 15 ? '#d29922' : '#da3633');
+        }
+        if (pct < 60) {
+          tokenBarFill.style.background = '#2ea043';
+        } else if (pct < 85) {
+          tokenBarFill.style.background = '#d29922';
+        } else {
+          tokenBarFill.style.background = '#da3633';
+        }
+
+        // Aggiorna modello reale dell'agente selezionato
+        if (agentModelName) {
+          if (liveGlobalQuota && liveGlobalQuota.subagents) {
+            const sub = liveGlobalQuota.subagents.find(s => s.id === selectedId);
+            if (sub && sub.model) {
+              agentModelName.textContent = sub.model;
+              const isCl = sub.model.includes('Claude'); agentModelName.style.color = isCl ? '#bc8cff' : '#58a6ff'; const wb = document.getElementById('agent-who-badge'); if (wb) { wb.textContent = isCl ? 'Claude Alterego' : 'Gemini'; wb.style.background = isCl ? '#bc8cff' : '#58a6ff'; }
+            }
+          } else {
+            agentModelName.textContent = selectedId === 10 ? 'Gemini 3.8 Flash (Low)' : 'Gemini 3.8 Flash (Tiered)';
+          }
+        }
+
+        // Aggiorna quote globali Antigravity (5h e Weekly) con formato IDENTICO tra Gemini e Claude
+        if (liveGlobalQuota) {
+          const t = I18N[appLang] || I18N.it;
+          const hm = v => { const d = new Date(v); return isNaN(d) ? '--' : d.toLocaleTimeString(appLang === 'it' ? 'it-IT' : 'en-GB', { hour: '2-digit', minute: '2-digit' }); };
+          if (globalGeminiQuota && liveGlobalQuota.gemini) {
+            const g = liveGlobalQuota.gemini;
+            const g5hNum = g.fiveHourFraction || 0;
+            globalGeminiQuota.textContent = `${g.fiveHour} (5h, reset ${hm(g.reset5h)}) | ${g.weekly} (${t.weeklyShort})`;
+            globalGeminiQuota.style.color = g5hNum < 0.02 ? '#da3633' : (g5hNum < 0.25 ? '#d29922' : '#58a6ff');
+          }
+          if (globalClaudeQuota && liveGlobalQuota.claude) {
+            const c = liveGlobalQuota.claude;
+            const c5hNum = c.fiveHourFraction || 0;
+            globalClaudeQuota.textContent = `${c.fiveHour} (5h, reset ${hm(c.reset5h)}) | ${c.weekly} (${t.weeklyShort})`;
+            globalClaudeQuota.style.color = c5hNum < 0.02 ? '#da3633' : (c5hNum < 0.25 ? '#d29922' : (liveGlobalQuota.fallbackToClaude ? '#bc8cff' : '#3fb950'));
+          }
+        }
+      }
+
+      const drawerPermissionBox = document.getElementById('drawer-permission-box');
+      const permTime = document.getElementById('perm-time');
+      const permTool = document.getElementById('perm-tool');
+      const permCommand = document.getElementById('perm-command');
+      const permDesc = document.getElementById('perm-desc');
+      const drawerLogs = document.getElementById('drawer-logs');
+      const taskInput = document.getElementById('task-input');
+      const sendTaskBtn = document.getElementById('send-task-btn');
+
+      function renderPills() {
+        teamPills.innerHTML = '';
+        TEAM.forEach(a => {
+          const pill = document.createElement('div');
+          const hasPerm = !!activePermissions[a.id];
+          pill.className = `agent-pill ${a.id === selectedId ? 'active' : ''}`;
+          pill.innerHTML = `<span class="dot" style="${hasPerm ? 'background:#e3b341; box-shadow:0 0 8px #e3b341;' : ''}"></span><span>${a.name} ${hasPerm ? '⚠️' : ''}</span>`;
+          pill.onclick = () => selectAgent(a.id, true);
+          teamPills.appendChild(pill);
+        });
+      }
+
+      function updateStatusDisplay(id) {
+        if (id !== selectedId) return;
+        const status = agentStatuses[id] || 'In attesa di istruzioni (Idle)';
+        drawerStatusText.textContent = status;
+        if (status.includes('Idle') || status.includes('attesa')) {
+          drawerLiveStatus.className = 'drawer-live-status';
+        } else {
+          drawerLiveStatus.className = 'drawer-live-status active';
+        }
+        updateTokenDisplay(id);
+      }
+
+      function renderPermissionBox() {
+        const perm = activePermissions[selectedId];
+        if (perm) {
+          drawerPermissionBox.style.display = 'block';
+          permTime.textContent = perm.time || new Date().toLocaleTimeString();
+          permTool.textContent = `Tool: ${perm.tool || 'run_command'}`;
+          permCommand.textContent = perm.command || 'Operazione critica da autorizzare';
+          permDesc.textContent = perm.description || 'L\'agente richiede autorizzazione prima di procedere.';
+        } else {
+          drawerPermissionBox.style.display = 'none';
+        }
+        renderPills();
+      }
+
+      function respondPermission(approved) {
+        const perm = activePermissions[selectedId];
+        if (!perm) return;
+        const time = new Date().toLocaleTimeString();
+        const actionStr = approved ? 'AUTORIZZATO' : 'RIFIUTATO';
+        appendLog(selectedId, `[${time}] ${approved ? '🟢' : '🔴'} Permesso ${actionStr}: ${perm.tool} -> "${perm.command}"`, approved ? 'activity' : 'perm-warn');
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'permissionResponse',
+            agentId: selectedId,
+            requestId: perm.requestId,
+            tool: perm.tool,
+            command: perm.command,
+            approved: approved
+          }));
+        }
+
+        activePermissions[selectedId] = null;
+        renderPermissionBox();
+        agentStatuses[selectedId] = approved ? `⚡ Esecuzione autorizzata: ${perm.tool}` : '🟢 In attesa di istruzioni (Idle)';
+        updateStatusDisplay(selectedId);
+      }
+
+      function simulatePermissionRequest(agentId = selectedId, tool = 'run_command', command = 'git push origin main') {
+        const time = new Date().toLocaleTimeString();
+        const req = {
+          agentId: selectedId,
+          requestId: `perm_${Date.now()}`,
+          tool: tool,
+          command: command,
+          description: 'Richiesta di approvazione per esecuzione operazione sul repository.',
+          time: time
+        };
+        activePermissions[selectedId] = req;
+        renderPermissionBox();
+        appendLog(selectedId, `[${time}] ⚠️ Richiesta autorizzazione in sospeso per: ${tool} -> "${command}"`, 'perm-warn');
+        agentStatuses[selectedId] = `⚠️ In attesa di approvazione (${tool})`;
+        updateStatusDisplay(selectedId);
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'requestPermission',
+            agentId: selectedId,
+            requestId: req.requestId,
+            tool: tool,
+            command: command,
+            description: req.description
+          }));
+        }
+      }
+
+      function selectAgent(id, notifyWs = false) {
+        selectedId = Number(id);
+        renderPills();
+        const a = TEAM.find(x => x.id === selectedId) || TEAM[0];
+        drawerName.textContent = a.name;
+        drawerRole.textContent = a.role;
+        drawerAvatar.textContent = a.avatar;
+
+        updateStatusDisplay(selectedId);
+        renderPermissionBox();
+
+        drawerLogs.innerHTML = '';
+        const list = agentLogs[selectedId] || [];
+        if (list.length === 0) {
+          appendLogElement(`[${new Date().toLocaleTimeString()}] ${a.name} connesso alla sala operativa.`);
+        } else {
+          list.forEach(item => {
+            if (item && item.isCmdBox) {
+              renderCmdBox(item);
+            } else {
+              appendLogElement(item.text, item.cls);
+            }
+          });
+        }
+
+        if (notifyWs && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'focusAgent', id: selectedId }));
+        }
+
+        try {
+          if (window.__pixelAgentsTestHooks && window.__pixelAgentsTestHooks.focusAgent) {
+            window.__pixelAgentsTestHooks.focusAgent(selectedId);
+          }
+        } catch {}
+      }
+
+      function appendLog(agentId, text, cls = '') {
+        const id = Number(agentId);
+        agentLogs[id] = agentLogs[id] || [];
+        agentLogs[id].push({ text, cls });
+        if (id === selectedId) {
+          appendLogElement(text, cls);
+        }
+      }
+
+      function appendLogElement(text, cls = '') {
+        const div = document.createElement('div');
+        div.className = `log-entry ${cls}`;
+        div.textContent = text;
+        drawerLogs.appendChild(div);
+        drawerLogs.scrollTop = drawerLogs.scrollHeight;
+      }
+
+      function appendCommandResultElement(agentId, cmd, output, code, time) {
+        const item = {
+          isCmdBox: true,
+          cmd: cmd,
+          output: output,
+          code: code,
+          time: time
+        };
+        const id = Number(agentId);
+        agentLogs[id] = agentLogs[id] || [];
+        agentLogs[id].push(item);
+        if (id === selectedId) {
+          renderCmdBox(item);
+        }
+      }
+
+      function renderCmdBox(item) {
+        const div = document.createElement('div');
+        div.className = 'log-entry cmd-box';
+        const isSuccess = item.code === 0;
+        div.innerHTML = `
+          <div class="cmd-res-header">
+            <span>⚙️ ${escapeHtml(item.cmd)}</span>
+            <span class="cmd-code ${isSuccess ? 'success' : 'err'}">${isSuccess ? 'exit 0' : 'exit ' + item.code}</span>
+          </div>
+          <pre class="cmd-stdout">${escapeHtml(item.output)}</pre>
+        `;
+        drawerLogs.appendChild(div);
+        drawerLogs.scrollTop = drawerLogs.scrollHeight;
+      }
+
+      function escapeHtml(str) {
+        return (str || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function sendTask() {
+        const text = taskInput.value.trim();
+        if (!text) return;
+        const time = new Date().toLocaleTimeString();
+        appendLog(selectedId, `[${time}] Task inoltrato: "${text}"`, 'task');
+        agentStatuses[selectedId] = `⚡ Task: ${text}`;
+        updateStatusDisplay(selectedId);
+        taskInput.value = '';
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'executeTask',
+            agentId: selectedId,
+            prompt: text
+          }));
+        }
+      }
+
+      window.quickTask = function(t) {
+        taskInput.value = t;
+        sendTask();
+      };
+
+      sendTaskBtn.onclick = sendTask;
+      taskInput.onkeydown = (e) => {
+        if (e.key === 'Enter') sendTask();
+      };
+
+      renderPills();
+      selectAgent(10);
+
+      // Sincronizzazione WebSocket Live con il Server
+      const ws = new WebSocket(`ws://${window.location.host}/ws`);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          const time = new Date().toLocaleTimeString();
+
+          // Inizializzazione log storici e team dinamico (da team.config.json) dal backend
+          if (msg.type === 'init' && msg.team) {
+            if (Array.isArray(msg.team) && msg.team.length > 0) {
+              TEAM = msg.team.map(ag => ({
+                id: Number(ag.id),
+                name: ag.name,
+                role: ag.role || 'Team Member',
+                avatar: ag.avatar || '🤖',
+                palette: ag.palette
+              }));
+              renderPills();
+              selectAgent(selectedId, false);
+            }
+            msg.team.forEach(ag => {
+              if (ag.logs && Array.isArray(ag.logs)) {
+                agentLogs[ag.id] = ag.logs.map(l => ({
+                  text: l,
+                  cls: l.includes('Task') ? 'task' : (l.includes('Permesso') ? 'perm-warn' : 'activity')
+                }));
+              }
+            });
+            drawerLogs.innerHTML = '';
+            (agentLogs[selectedId] || []).forEach(item => appendLogElement(item.text, item.cls));
+          }
+
+          // Selezione / Focus dell'agente (da click su canvas o da server)
+          if (msg.type === 'agentSelected' || msg.type === 'agentFocused') {
+            const targetId = Number(msg.id || msg.agentId);
+            if (targetId && targetId !== selectedId) {
+              selectAgent(targetId, false);
+            }
+          }
+
+          // Richiesta di autorizzazione / permessi interattiva (FASE 2)
+          if (msg.type === 'agentPermissionRequest') {
+            const targetId = Number(msg.id || msg.agentId || 10);
+            activePermissions[targetId] = {
+              agentId: targetId,
+              requestId: msg.requestId,
+              tool: msg.tool,
+              command: msg.command,
+              description: msg.description,
+              time: msg.time || time
+            };
+            if (targetId === selectedId) {
+              renderPermissionBox();
+            }
+            renderPills();
+            appendLog(targetId, `[${time}] ⚠️ Richiesta autorizzazione: ${msg.tool} -> "${msg.command}"`, 'perm-warn');
+          }
+
+          // Esito risoluzione permesso
+          if (msg.type === 'permissionResolved') {
+            const targetId = Number(msg.agentId || msg.id || 10);
+            activePermissions[targetId] = null;
+            if (targetId === selectedId) {
+              renderPermissionBox();
+            }
+            renderPills();
+          }
+
+          // Risultato reale del comando eseguito dal Command Bridge Reale
+          if (msg.type === 'commandResult') {
+            const targetId = Number(msg.id || msg.agentId || 10);
+            const time = msg.time || new Date().toLocaleTimeString();
+            appendCommandResultElement(targetId, msg.command, msg.output, msg.exitCode, time);
+          }
+
+          // Aggiornamento Quote & Modelli Reali Antigravity (Live RPC)
+          if (msg.type === 'liveQuotaUpdate' && msg.quota) {
+            liveGlobalQuota = msg.quota;
+            updateTokenDisplay(selectedId);
+          }
+
+          // Aggiornamento Token & Context Window live
+          if (msg.type === 'agentContextUsage') {
+            const targetId = Number(msg.id || msg.agentId || 10);
+            agentTokens[targetId] = {
+              used: Number(msg.contextTokens) || 0,
+              max: Number(msg.maxContextTokens) || 200000
+            };
+            if (targetId === selectedId) {
+              updateTokenDisplay(selectedId);
+            }
+          }
+
+          // Inizio esecuzione tool o comando
+          if (msg.type === 'agentToolStart') {
+            const targetId = Number(msg.id || msg.agentId || 10);
+            const desc = msg.status || (msg.toolName ? ('Eseguo: ' + msg.toolName) : 'Comando in esecuzione');
+            agentStatuses[targetId] = `⚡ ${desc}`;
+            updateStatusDisplay(targetId);
+            appendLog(targetId, `[${time}] ⚡ ${desc}`, 'activity');
+          }
+
+          // Attività o log dettagliato
+          if (msg.type === 'agentActivity') {
+            const targetId = Number(msg.agentId || msg.id || 10);
+            if (msg.status) {
+              agentStatuses[targetId] = `⚡ ${msg.status}`;
+              updateStatusDisplay(targetId);
+            }
+            if (msg.log) {
+              appendLog(targetId, msg.log, 'activity');
+            }
+          }
+
+          // Completamento tool o attesa
+          if (msg.type === 'agentStatus' && msg.status === 'waiting') {
+            const targetId = Number(msg.id || msg.agentId || 10);
+            agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
+            updateStatusDisplay(targetId);
+            appendLog(targetId, `[${time}] ✔ Operazione completata. In attesa di nuove istruzioni.`, 'done');
+          }
+
+          if (msg.type === 'agentToolsClear') {
+            const targetId = Number(msg.id || msg.agentId || 10);
+            agentStatuses[targetId] = '🟢 In attesa di istruzioni (Idle)';
+            updateStatusDisplay(targetId);
+          }
+
+          // Instradamento fisico: un agente (es. Alberto CEO) cammina verso un sottoposto e mostra il popup "Message from Parent Agent"
+          if (msg.type === 'agentDelegation') {
+            triggerAgentDelegationWalk(
+              Number(msg.fromAgentId || 10),
+              Number(msg.toAgentId || 6),
+              msg.fromName || 'Alberto (CEO)',
+              msg.toName || 'Luigi (Backend)',
+              msg.message || 'Nuovo task operativo assegnato.'
+            );
+          }
+        } catch (err) {
+          console.error('[Webview] Errore ws message:', err);
+        }
+      };
+      window.promptDiscordWebhook = function() {
+        const current = localStorage.getItem('azienda_discord_webhook') || '';
+        const url = window.prompt('Inserisci il Webhook URL del tuo canale Discord:\n(I messaggi e le task verranno replicati su Discord)', current);
+        if (url !== null) {
+          const trimmed = url.trim();
+          localStorage.setItem('azienda_discord_webhook', trimmed);
+          updateDiscordBadge();
+          if (trimmed && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'setDiscordWebhook', webhookUrl: trimmed }));
+          }
+        }
+      };
+
+      function updateDiscordBadge() {
+        const url = localStorage.getItem('azienda_discord_webhook');
+        if (url && url.startsWith('http')) {
+          discordStatusBadge.textContent = '💬 Discord: ON';
+          discordStatusBadge.style.color = '#58a6ff';
+          discordStatusBadge.style.borderColor = '#58a6ff';
+          discordStatusBadge.style.background = 'rgba(88, 166, 255, 0.15)';
+        } else {
+          discordStatusBadge.textContent = '💬 Discord: Configura';
+          discordStatusBadge.style.color = '#8b949e';
+          discordStatusBadge.style.borderColor = '#30363d';
+          discordStatusBadge.style.background = '#21262d';
+        }
+      }
+      updateDiscordBadge();
+
+      // =========================================================================
+      // INSTRADAMENTO FISICO AGENTI & POPUP "MESSAGE FROM PARENT AGENT"
+      // =========================================================================
+      const parentPopup = document.getElementById('parent-message-popup');
+      const parentPopupBadge = document.getElementById('parent-popup-badge');
+      const parentPopupText = document.getElementById('parent-popup-text');
+      const parentPopupStep = document.getElementById('parent-popup-step');
+      let activeDelegationAnim = null;
+
+      function getCharacterScreenCoords(char) {
+        const hooks = window.__pixelAgentsTestHooks;
+        if (hooks && typeof hooks.getTileCenter === 'function') {
+          const tileX = (typeof char.x === 'number' ? char.x / 16 - 0.5 : char.tileCol);
+          const tileY = (typeof char.y === 'number' ? char.y / 16 - 0.5 : char.tileRow);
+          const pt = hooks.getTileCenter(tileX, tileY);
+          if (pt) return { x: pt.x, y: pt.y - 42 };
+        }
+        const overlayEl = document.querySelector(`[data-testid="agent-overlay"][data-agent-id="${char.id}"]`);
+        if (overlayEl) {
+          const r = overlayEl.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top - 8 };
+        }
+        return { x: window.innerWidth * 0.35, y: window.innerHeight * 0.45 };
+      }
+
+      function findNearestWalkableNextTo(office, targetChar) {
+        const dirs = [
+          { dc: 0, dr: 1 }, { dc: 0, dr: -1 },
+          { dc: 1, dr: 0 }, { dc: -1, dr: 0 },
+          { dc: 1, dr: 1 }, { dc: -1, dr: 1 },
+          { dc: 1, dr: -1 }, { dc: -1, dr: -1 },
+          { dc: 0, dr: 2 }, { dc: 2, dr: 0 }, { dc: -2, dr: 0 }
+        ];
+        const walkableSet = new Set((office.walkableTiles || []).map(t => `${t.col},${t.row}`));
+        for (const d of dirs) {
+          const c = targetChar.tileCol + d.dc;
+          const r = targetChar.tileRow + d.dr;
+          if (walkableSet.has(`${c},${r}`)) {
+            return { col: c, row: r };
+          }
+        }
+        if (typeof office.closestFreeWalkableTile === 'function') {
+          return office.closestFreeWalkableTile(targetChar.tileCol, targetChar.tileRow);
+        }
+        return { col: targetChar.tileCol, row: targetChar.tileRow + 1 };
+      }
+
+      function triggerAgentDelegationWalk(fromId, toId, fromName, toName, messageText) {
+        const office = window.__officeState;
+        const t = I18N[appLang] || I18N.it;
+        const cleanMsg = String(messageText || '').replace(/^Messaggio operativo.*?:\s*/i, '').trim();
+        const shortMsg = cleanMsg.length > 170 ? cleanMsg.slice(0, 167) + '...' : cleanMsg;
+        const time = new Date().toLocaleTimeString();
+
+        appendLog(fromId, `[${time}] ${t.walkLog(toName, shortMsg)}`, 'task');
+        appendLog(toId, `[${time}] 📨 Message from Parent Agent (${fromName}): "${shortMsg}"`, 'activity');
+
+        if (!office || !office.characters) return;
+        const sender = office.characters.get(Number(fromId));
+        const receiver = office.characters.get(Number(toId));
+        if (!sender || !receiver) return;
+
+        if (activeDelegationAnim) {
+          cancelAnimationFrame(activeDelegationAnim.raf);
+          clearTimeout(activeDelegationAnim.timer);
+        }
+
+        const destTile = findNearestWalkableNextTo(office, receiver);
+        sender.isDelivering = true;
+        office.walkToTile(sender.id, destTile.col, destTile.row);
+
+        const shortFrom = fromName.split(' ')[0];
+        const shortTo = toName.split(' ')[0];
+        const popupTitleEl = parentPopup.querySelector('span');
+        if (popupTitleEl) {
+          popupTitleEl.textContent = Number(fromId) === 10
+            ? 'MESSAGE FROM PARENT AGENT'
+            : (Number(toId) === 10 ? 'REPORT TO PARENT AGENT' : 'AGENT-TO-AGENT COLLABORATION');
+        }
+        parentPopupBadge.textContent = `${shortFrom} ➔ ${shortTo}`;
+        parentPopupText.textContent = `"${shortMsg}"`;
+        parentPopupStep.textContent = t.walkStep(shortFrom, shortTo);
+        parentPopup.style.display = 'block';
+        parentPopup.style.opacity = '1';
+
+        let phase = 'walking_to_target'; // 'walking_to_target' -> 'talking' -> 'returning'
+        let talkStart = 0;
+
+        function stepAnim() {
+          const tNow = I18N[appLang] || I18N.it;
+          const anchorChar = phase === 'talking' ? receiver : sender;
+          const pos = getCharacterScreenCoords(anchorChar);
+          parentPopup.style.left = `${Math.max(130, Math.min(window.innerWidth - 460, pos.x))}px`;
+          parentPopup.style.top = `${Math.max(80, pos.y)}px`;
+
+          const dist = Math.abs(sender.tileCol - destTile.col) + Math.abs(sender.tileRow - destTile.row);
+          if (phase === 'walking_to_target' && (sender.path.length === 0 || dist === 0)) {
+            phase = 'talking';
+            talkStart = Date.now();
+            parentPopupStep.textContent = tNow.talkStep(shortFrom, shortTo);
+            office.showWaitingBubble(receiver.id, false);
+          } else if (phase === 'talking' && Date.now() - talkStart > 4500) {
+            phase = 'returning';
+            parentPopupStep.textContent = tNow.returnStep(shortFrom);
+            sender.isDelivering = false;
+            office.sendToSeat(sender.id);
+            activeDelegationAnim.timer = setTimeout(() => {
+              parentPopup.style.opacity = '0';
+              setTimeout(() => { parentPopup.style.display = 'none'; }, 260);
+              cancelAnimationFrame(activeDelegationAnim.raf);
+              activeDelegationAnim = null;
+            }, 2200);
+          }
+
+          if (activeDelegationAnim) {
+            activeDelegationAnim.raf = requestAnimationFrame(stepAnim);
+          }
+        }
+
+        activeDelegationAnim = { raf: requestAnimationFrame(stepAnim), timer: null };
+      }
+
+      applyLanguage();
+
+      window.simulateDelegationWalk = function() {
+        const targetId = selectedId === 10 ? 6 : selectedId;
+        const targetAgent = TEAM.find(a => a.id === targetId) || TEAM[1];
+        const sampleTasks = {
+          6: 'Luigi, verifica le rotte RPC del backend e ottimizza il gestore delle quote.',
+          7: 'Gabri, aggiorna i componenti UI della dashboard e sincronizza i badge live.',
+          8: 'Carlo, esegui un audit di sicurezza e valida i test end-to-end sui WebSocket.'
+        };
+        triggerAgentDelegationWalk(
+          10,
+          targetAgent.id,
+          'Alberto (CEO)',
+          targetAgent.name,
+          sampleTasks[targetAgent.id] || 'Procedi con il task assegnato e riporta l\'esito.'
+        );
+      };
+    </script>
+
+    <!-- JS ENGINE ORIGINALE PIXEL AGENTS -->
+    <script type="module" crossorigin src="./assets/index-N6HawqUS.js"></script>
+  </body>
+</html>

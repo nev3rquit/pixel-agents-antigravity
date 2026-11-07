@@ -1,0 +1,15 @@
+{
+  "name": "azienda-ai-office",
+  "version": "1.0.0",
+  "description": "Sala Operativa Autonoma Ufficiale di AziendaAI con simulazione Pixel Art e Console Operativa Agenti",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.28.1",
+    "express": "^4.22.3",
+    "pngjs": "^7.0.0",
+    "ws": "^8.22.1"
+  }
+}

@@ -1,0 +1,16 @@
+# Git Ignore per AziendaAI
+node_modules/
+dist/
+tests/
+.env
+.env.local
+*.log
+*.tmp
+*.jsonl
+tasks_queue.json
+discord.config.json
+agents.config.json
+.pixel-agents/
+__pycache__/
+*.pyc
+.vscode/
