@@ -1585,7 +1585,8 @@
         const time = new Date().toLocaleTimeString();
 
         appendLog(fromId, `[${time}] ${t.walkLog(toName, shortMsg)}`, 'task');
-        appendLog(toId, `[${time}] 📨 Message from Parent Agent (${fromName}): "${shortMsg}"`, 'activity');
+        const roleLabel = Number(fromId) === 10 ? 'Delega CEO' : (Number(toId) === 10 ? 'Report per CEO' : 'Messaggio');
+        appendLog(toId, `[${time}] 📨 ${roleLabel} (${fromName}): "${shortMsg}"`, 'activity');
 
         if (!office || !office.characters) {
           if (typeof onComplete === 'function') onComplete();
@@ -1637,8 +1638,8 @@
         const popupTitleEl = parentPopup.querySelector('span');
         if (popupTitleEl) {
           popupTitleEl.textContent = Number(fromId) === 10
-            ? 'MESSAGE FROM PARENT AGENT'
-            : (Number(toId) === 10 ? 'REPORT TO PARENT AGENT' : 'AGENT-TO-AGENT COLLABORATION');
+            ? '📋 DELEGA OPERATIVA CEO'
+            : (Number(toId) === 10 ? '📊 REPORT OPERATIVO PER IL CEO' : '🤝 COLLABORAZIONE TEAM');
         }
         parentPopupBadge.textContent = `${shortFrom} ➔ ${shortTo}`;
         parentPopupText.textContent = `"${shortMsg}"`;

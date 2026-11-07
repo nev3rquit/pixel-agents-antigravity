@@ -148,9 +148,6 @@ function resolveSubagent(agentId) {
 
 function allSessionsMap() {
   const m = {};
-  if (PARENT_SESSION) {
-    m[PARENT_SESSION] = 10; // Alias sessione Alberto (CEO / Parent Agent)
-  }
   for (const [a, s] of Object.entries(PRIMARY)) m[s] = Number(a);
   for (const [a, s] of Object.entries(ALTEREGO)) m[s] = Number(a);
   return m;

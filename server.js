@@ -1632,6 +1632,8 @@ function preloadAgentLogs() {
 
 preloadAgentLogs();
 
+const recentDelegations = new Map(); // key -> timestamp per deduplicazione (cooldown 10s)
+
 function monitorLiveAntigravity() {
   if (!fs.existsSync(BRAIN_DIR)) return;
   try {
@@ -1675,15 +1677,20 @@ function monitorLiveAntigravity() {
                     const fromAgent = TEAM.find(a => a.id === fromAgentId);
                     const contentMatch = /content=([\s\S]*?)(?:<\/SYSTEM_MESSAGE>|$)/i.exec(contentStr);
                     const rawMsg = contentMatch ? contentMatch[1].trim() : contentStr;
-                    delegationActiveUntil.set(fromAgentId, Date.now() + 8000);
-                    broadcast({
-                      type: 'agentDelegation',
-                      fromAgentId: fromAgentId,
-                      toAgentId: agentId,
-                      fromName: fromAgent ? fromAgent.name : `Agente ${fromAgentId}`,
-                      toName: targetAgent.name,
-                      message: rawMsg
-                    });
+                    const dKey = `${fromAgentId}->${agentId}:${rawMsg.slice(0, 50)}`;
+                    const lastDTime = recentDelegations.get(dKey) || 0;
+                    if (Date.now() - lastDTime > 10000) {
+                      recentDelegations.set(dKey, Date.now());
+                      delegationActiveUntil.set(fromAgentId, Date.now() + 8000);
+                      broadcast({
+                        type: 'agentDelegation',
+                        fromAgentId: fromAgentId,
+                        toAgentId: agentId,
+                        fromName: fromAgent ? fromAgent.name : `Agente ${fromAgentId}`,
+                        toName: targetAgent.name,
+                        message: rawMsg
+                      });
+                    }
                   }
                 }
               }
@@ -1722,15 +1729,20 @@ function monitorLiveAntigravity() {
                     const toAgentId = allMap[rawRecip];
                     if (toAgentId && toAgentId !== agentId) {
                       const destAgent = TEAM.find(a => a.id === toAgentId);
-                      delegationActiveUntil.set(agentId, Date.now() + 8000);
-                      broadcast({
-                        type: 'agentDelegation',
-                        fromAgentId: agentId,
-                        toAgentId: toAgentId,
-                        fromName: targetAgent.name,
-                        toName: destAgent ? destAgent.name : `Agente ${toAgentId}`,
-                        message: rawMsg
-                      });
+                      const dKey = `${agentId}->${toAgentId}:${rawMsg.slice(0, 50)}`;
+                      const lastDTime = recentDelegations.get(dKey) || 0;
+                      if (Date.now() - lastDTime > 10000) {
+                        recentDelegations.set(dKey, Date.now());
+                        delegationActiveUntil.set(agentId, Date.now() + 8000);
+                        broadcast({
+                          type: 'agentDelegation',
+                          fromAgentId: agentId,
+                          toAgentId: toAgentId,
+                          fromName: targetAgent.name,
+                          toName: destAgent ? destAgent.name : `Agente ${toAgentId}`,
+                          message: rawMsg
+                        });
+                      }
                     }
                   }
                 }
@@ -1781,30 +1793,6 @@ function monitorLiveAntigravity() {
                       }
                     }
                   } catch {}
-
-                  // Se un collega (Luigi, Gabri, Carlo) ha completato il suo lavoro o menziona un altro collega, cammina fisicamente verso di lui (o verso Alberto CEO) per consegnare il risultato!
-                  if (agentId !== 10) {
-                    const lowerResp = finalText.toLowerCase();
-                    let reportTargetId = 10; // Di default riporta il risultato ad Alberto (CEO)
-                    for (const member of TEAM) {
-                      if (member.id !== agentId && member.id !== 10) {
-                        const kw = (member.name || '').toLowerCase().split(' ')[0];
-                        if (kw && lowerResp.includes(kw)) {
-                          reportTargetId = member.id;
-                          break;
-                        }
-                      }
-                    }
-                    const destMember = TEAM.find(a => a.id === reportTargetId) || TEAM[0];
-                    broadcast({
-                      type: 'agentDelegation',
-                      fromAgentId: agentId,
-                      toAgentId: destMember.id,
-                      fromName: targetAgent.name,
-                      toName: destMember.name,
-                      message: finalText
-                    });
-                  }
 
                   sendFinalAgentResponse(agentId, finalText);
                 }
