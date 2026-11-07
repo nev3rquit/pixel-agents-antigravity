@@ -603,6 +603,7 @@
           <button class="quick-chip" id="chip-walk" style="border-color:#58a6ff; color:#58a6ff;" onclick="simulateDelegationWalk()">🚶‍♂️ Test Delegacy Alberto→Luigi</button>
           <button class="quick-chip" id="chip-lounge" style="border-color:#bc8cff; color:#bc8cff;" onclick="toggleLoungeBreak()">☕ Pausa Divano</button>
           <button class="quick-chip" id="chip-standup" style="border-color:#3fb950; color:#3fb950;" onclick="triggerStandupMeeting()">📢 Convoca Riunione</button>
+          <button class="quick-chip" id="chip-report" style="border-color:#f778ba; color:#f778ba;" onclick="openCeoReportModal(false)">📊 Report CEO</button>
         </div>
 
         <div class="command-bar">
@@ -743,6 +744,50 @@
       </div>
     </div>
 
+    <!-- INNOVAZIONE #6: MODALE REPORT ESECUTIVO CEO (1-CLICK MARKDOWN + DISCORD) -->
+    <div id="ceo-report-modal-overlay" onclick="if(event.target===this) closeCeoReportModal()" style="
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10002;
+      background: rgba(1, 4, 9, 0.78);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    ">
+      <div style="
+        width: 100%;
+        max-width: 720px;
+        max-height: 82vh;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.85);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      ">
+        <div style="padding: 14px 20px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.2rem;">📊</span>
+            <h2 id="ceo-report-modal-title" style="font-size: 1rem; color: #f0f6fc; margin: 0;">Report Esecutivo CEO — AziendaAI</h2>
+          </div>
+          <button onclick="closeCeoReportModal()" style="background:#da3633; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.78rem; font-weight:700; cursor:pointer;">✕</button>
+        </div>
+        <div style="padding: 16px 20px; overflow-y: auto; flex: 1;">
+          <pre id="ceo-report-content" style="background:#161b22; border:1px solid #30363d; color:#e6edf3; padding:14px; border-radius:8px; font-family:Consolas,monospace; font-size:0.78rem; line-height:1.45; white-space:pre-wrap; word-break:break-word; margin:0;"></pre>
+        </div>
+        <div style="padding: 12px 20px; background: #161b22; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+          <span id="ceo-report-status" style="font-size: 0.76rem; color: #3fb950;"></span>
+          <div style="display: flex; gap: 8px;">
+            <button onclick="copyCeoReport()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:7px 13px; font-size:0.8rem; cursor:pointer;">📋 Copia Markdown</button>
+            <button onclick="openCeoReportModal(true)" style="background:#5865F2; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:0.8rem; font-weight:700; cursor:pointer;">📢 Pubblica su Discord</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- SCRIPT BRIDGE PER SINCRONIZZARE TOPBAR, TENDINA E MOTORE CANVAS -->
     <script>
       // =========================================================================
@@ -777,6 +822,7 @@
           projBtn: 'Progetto:',
           projModalTitle: 'Seleziona Progetto Target Operativo',
           projSaveBtn: '✅ Imposta Progetto',
+          chipReport: '📊 Report CEO',
           standupHeader: '📢 RIUNIONE GENERALE (STANDUP MEETING)',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri e Carlo raggiungono la scrivania di Alberto...',
           standupTalkStep: '🤝 Team riunito! Allineamento sprint in corso con Alberto (CEO)...',
@@ -817,6 +863,7 @@
           projBtn: 'Workspace:',
           projModalTitle: 'Select Target Project Workspace',
           projSaveBtn: '✅ Set Workspace',
+          chipReport: '📊 CEO Report',
           standupHeader: '📢 ALL-HANDS STANDUP MEETING',
           standupWalkStep: '🚶‍♂️ Luigi, Gabri & Carlo are gathering at Alberto\'s desk...',
           standupTalkStep: '🤝 Team gathered! Sprint alignment in progress with Alberto (CEO)...',
@@ -849,6 +896,7 @@
         const c5 = document.getElementById('chip-walk'); if (c5) c5.textContent = t.chipWalk;
         const c6 = document.getElementById('chip-lounge'); if (c6) c6.textContent = isLoungeBreakActive ? t.chipLoungeOn : t.chipLoungeOff;
         const c7 = document.getElementById('chip-standup'); if (c7) c7.textContent = t.chipStandup;
+        const c8 = document.getElementById('chip-report'); if (c8) c8.textContent = t.chipReport;
         const kbBtn = document.getElementById('label-kanban-btn'); if (kbBtn) kbBtn.textContent = t.kanbanBtn;
         const kbTit = document.getElementById('kanban-modal-title'); if (kbTit) kbTit.textContent = t.kanbanTitle;
         const kbClr = document.getElementById('kanban-clear-btn'); if (kbClr) kbClr.textContent = t.kanbanClear;
@@ -1854,6 +1902,55 @@
       }
 
       updateSoundButtonUI();
+
+      // =========================================================================
+      // INNOVAZIONE #6: REPORT ESECUTIVO CEO (1-CLICK MARKDOWN + DISCORD)
+      // =========================================================================
+      window.openCeoReportModal = async function(postToDiscord = false) {
+        const overlay = document.getElementById('ceo-report-modal-overlay');
+        const contentEl = document.getElementById('ceo-report-content');
+        const statusEl = document.getElementById('ceo-report-status');
+        if (overlay) overlay.style.display = 'flex';
+        if (contentEl && !postToDiscord) contentEl.textContent = '⏳ Generazione Report Esecutivo CEO in corso...';
+        if (statusEl) statusEl.textContent = '';
+
+        try {
+          const res = await fetch('/api/ceo-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postToDiscord })
+          });
+          const data = await res.json();
+          if (data && data.report) {
+            if (contentEl) contentEl.textContent = data.report;
+            playRetroSound('complete');
+            if (postToDiscord && statusEl) {
+              statusEl.textContent = appLang === 'it'
+                ? '✅ Report pubblicato nel canale #📢-sala-operativa su Discord!'
+                : '✅ Report posted to #📢-sala-operativa on Discord!';
+            }
+          }
+        } catch (err) {
+          if (contentEl) contentEl.textContent = 'Errore generazione report: ' + err.message;
+        }
+      };
+
+      window.closeCeoReportModal = function() {
+        const overlay = document.getElementById('ceo-report-modal-overlay');
+        if (overlay) overlay.style.display = 'none';
+      };
+
+      window.copyCeoReport = function() {
+        const contentEl = document.getElementById('ceo-report-content');
+        const statusEl = document.getElementById('ceo-report-status');
+        if (!contentEl) return;
+        navigator.clipboard.writeText(contentEl.textContent || '').then(() => {
+          playRetroSound('complete');
+          if (statusEl) {
+            statusEl.textContent = appLang === 'it' ? '✅ Markdown copiato negli appunti!' : '✅ Markdown copied to clipboard!';
+          }
+        }).catch(() => {});
+      };
 
       applyLanguage();
 

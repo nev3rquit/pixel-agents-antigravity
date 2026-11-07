@@ -1349,6 +1349,64 @@ app.post('/api/tasks/clear', (req, res) => {
   res.json({ success: true, queue: current });
 });
 
+app.post('/api/ceo-report', (req, res) => {
+  const { postToDiscord } = req.body || {};
+  const projPath = routing.getTargetProject() || WORKSPACE_DIR;
+  const bin = process.platform === 'win32' ? 'git.exe' : 'git';
+  execFile(bin, ['log', '-n', '6', '--oneline'], { cwd: projPath, timeout: 8000, windowsHide: true }, (err, stdout) => {
+    const gitCommits = (stdout || '').trim() || 'Nessun commit recente rilevato.';
+    const tasks = loadTaskQueue();
+    const completed = tasks.filter(t => t.status === 'completed');
+    const active = tasks.filter(t => t.status === 'dispatched' || t.status === 'running');
+    const queued = tasks.filter(t => t.status === 'queued_rest' || t.status === 'queued');
+    const mode = routing.getMode();
+    const g5h = lastQuotaData?.gemini?.fiveHour || '100%';
+    const gWk = lastQuotaData?.gemini?.weekly || '100%';
+    const c5h = lastQuotaData?.claude?.fiveHour || '100%';
+    const cWk = lastQuotaData?.claude?.weekly || '100%';
+    const nowStr = new Date().toLocaleString('it-IT');
+
+    const reportMd = [
+      `# 📊 Report Esecutivo CEO — AziendaAI`,
+      `**Data & Ora:** ${nowStr}`,
+      `**Progetto Target Attivo:** \`${projPath}\``,
+      `**Modalità Operativa:** \`${mode.toUpperCase()}\``,
+      ``,
+      `## 🧠 Telemetria Quote Antigravity`,
+      `- **🤖 Gemini (Flash / Pro):** 5h: \`${g5h}\` | Settimanale: \`${gWk}\``,
+      `- **🧠 Claude (Alterego Fallback):** 5h: \`${c5h}\` | Settimanale: \`${cWk}\``,
+      ``,
+      `## 👥 Stato Squadra`,
+      ...TEAM.map(a => {
+        const lastLog = (a.logs && a.logs.length > 0) ? a.logs[a.logs.length - 1] : 'Pronto';
+        return `- **${a.avatar || '🤖'} ${a.name}** (*${a.role}*): ${lastLog}`;
+      }),
+      ``,
+      `## 📋 Riepilogo Lavagna Kanban`,
+      `- **✅ Completati:** ${completed.length} | **⚡ In Corso:** ${active.length} | **⏳ In Coda:** ${queued.length}`,
+      ...(completed.slice(-5).reverse().map(t => `  - ✔ **[${t.agentName}]** \`${(t.prompt || t.command || '').slice(0, 80)}\``)),
+      ``,
+      `## 🐙 Ultimi Commit Git (${path.basename(projPath)})`,
+      '```text',
+      gitCommits,
+      '```'
+    ].join('\n');
+
+    if (postToDiscord) {
+      try {
+        sendDiscordAnnouncement(reportMd.slice(0, 3900), 0x2ea043);
+      } catch {}
+    }
+
+    res.json({
+      ok: true,
+      report: reportMd,
+      postedToDiscord: Boolean(postToDiscord),
+      stats: { completed: completed.length, active: active.length, queued: queued.length, mode }
+    });
+  });
+});
+
 app.post('/api/permission/request', (req, res) => {
   const { agentId, tool, command, description } = req.body;
   const targetId = Number(agentId) || 10;
