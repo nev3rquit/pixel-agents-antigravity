@@ -833,12 +833,21 @@ function sendOfficeInitProtocol(ws) {
   }
 
   // 6. Sincronizzazione stato Kanban & Lounge Break iniziale per il client
-  // All'avvio e in sendOfficeInitProtocol, isLoungeBreakActive deve essere resettato a false
-  // (salvo routing.isResting() === true), altrimenti la dashboard apre sempre con tutti sul divano.
-  if (!routing.isResting()) {
-    isLoungeBreakActive = false;
-  }
-  const loungeActive = routing.isResting() ? true : isLoungeBreakActive;
+  // Mappa granulare per-agente: chi non ha tool attivi è di default sui divanetti in lounge (Idle),
+  // mentre chi ha tool attivi è al PC alla scrivania.
+  const currentQueue = loadTaskQueue();
+  const busyIds = new Set();
+  currentQueue.forEach(t => {
+    if (t.status === 'dispatched' || t.status === 'running') {
+      busyIds.add(Number(t.agentId));
+    }
+  });
+
+  const agentLoungeStates = {};
+  TEAM.forEach(a => {
+    // In modalità rest (quota esaurita) tutti in lounge, altrimenti in lounge solo se non occupati
+    agentLoungeStates[a.id] = routing.isResting() ? true : !busyIds.has(a.id);
+  });
 
   ws.send(JSON.stringify({
     type: 'tasksQueueUpdated',
@@ -847,7 +856,8 @@ function sendOfficeInitProtocol(ws) {
   }));
   ws.send(JSON.stringify({
     type: 'loungeBreakState',
-    active: loungeActive,
+    active: routing.isResting() ? true : Object.values(agentLoungeStates).some(Boolean),
+    agentLoungeStates: agentLoungeStates,
     reason: 'initial_sync'
   }));
 }

@@ -966,7 +966,7 @@
       };
       const agentOnSofa = { 10: false, 6: false, 7: false, 8: false };
       const agentWorking = { 10: false, 6: false, 7: false, 8: false };
-      const agentLastActiveAt = { 10: Date.now(), 6: Date.now(), 7: Date.now(), 8: Date.now() };
+      const agentLastActiveAt = { 10: 0, 6: 0, 7: 0, 8: 0 };
 
       const WORK_DESK_SEATS = {
         10: 'f-1773356768339-eo6u', // Alberto (CEO)
@@ -1447,7 +1447,11 @@
           // Pausa Caffè / Divano in Sala Relax (Automatica su Rest / Inattività o Manuale)
           if (msg.type === 'loungeBreakState') {
             playRetroSound('lounge');
-            if (msg.agentId) {
+            if (msg.agentLoungeStates && typeof msg.agentLoungeStates === 'object') {
+              for (const [aId, onSofa] of Object.entries(msg.agentLoungeStates)) {
+                setAgentLounge(Number(aId), Boolean(onSofa), Boolean(onSofa));
+              }
+            } else if (msg.agentId) {
               setAgentLounge(Number(msg.agentId), Boolean(msg.active), Boolean(msg.force));
             } else {
               setLoungeBreak(Boolean(msg.active), false, Boolean(msg.forceAll));
@@ -1655,7 +1659,18 @@
           return;
         }
 
-        if (agentOnSofa[id] === onSofa) return;
+        if (agentOnSofa[id] === onSofa) {
+          const ch = office.characters.get(id);
+          const targetSeat = onSofa ? LOUNGE_SOFA_SEATS[id] : WORK_DESK_SEATS[id];
+          if (ch && !ch.isDelivering && ch.seatId !== targetSeat) {
+            if (office.seats) {
+              const dSeat = office.seats.get(WORK_DESK_SEATS[id]); if (dSeat) dSeat.assigned = false;
+              const sSeat = office.seats.get(LOUNGE_SOFA_SEATS[id]); if (sSeat) sSeat.assigned = false;
+            }
+            office.reassignSeat(id, targetSeat);
+          }
+          return;
+        }
         agentOnSofa[id] = onSofa;
         isLoungeBreakActive = Object.values(agentOnSofa).some(Boolean);
 
@@ -1708,15 +1723,39 @@
         }
       };
 
-      // Timer inattività automatica per singolo agente (>5 minuti senza task -> va sul divano se idle)
-      setInterval(() => {
+      // Routine di sincronizzazione automatica Idle = Divanetti Lounge / Working = Scrivania PC
+      function syncOfficeLoungeAndDesks() {
+        const office = window.__officeState;
+        if (!office || !office.characters) return;
         const now = Date.now();
+
         [10, 6, 7, 8].forEach(id => {
-          if (!agentWorking[id] && !agentOnSofa[id] && (now - (agentLastActiveAt[id] || 0) > 5 * 60 * 1000)) {
-            setAgentLounge(id, true);
+          const ch = office.characters.get(id);
+          if (!ch || ch.isDelivering) return; // Se sta camminando per una consegna di delega, non interrompere
+
+          const isActivelyWorking = Boolean(agentWorking[id]) || (now - (agentLastActiveAt[id] || 0) < 5000);
+
+          if (isActivelyWorking) {
+            // DEVE STARE AL PC ALLA SCRIVANIA
+            if (agentOnSofa[id]) {
+              setAgentLounge(id, false, true);
+            }
+            ensureAgentAtWorkDesk(id);
+          } else {
+            // INATTIVO (IDLE) DA OLTRE 5 SECONDI: DEVE ANDARE SUL SUO DIVANETTO IN LOUNGE
+            if (!agentOnSofa[id]) {
+              setAgentLounge(id, true, false);
+            }
           }
         });
-      }, 15000);
+      }
+
+      // Check frequente ogni 2 secondi per sincronizzazione fluida e naturale
+      setInterval(syncOfficeLoungeAndDesks, 2000);
+
+      // Posizionamento iniziale sul divanetto appena il canvas e l'ufficio sono pronti (~1.8s dall'avvio)
+      setTimeout(syncOfficeLoungeAndDesks, 1800);
+      setTimeout(syncOfficeLoungeAndDesks, 3500);
 
       // =========================================================================
       // INNOVAZIONE #2: RIUNIONE GENERALE / STANDUP MEETING ATTORNO AD ALBERTO
