@@ -1429,6 +1429,7 @@
             } else {
               agentWorking[targetId] = false;
               agentLastActiveAt[targetId] = Date.now() - 5000;
+              setAgentLounge(targetId, true, false);
             }
             if (msg.status) {
               agentStatuses[targetId] = isIdleActivity ? '🟢 In attesa di istruzioni (Idle)' : `⚡ ${msg.status}`;
@@ -1454,6 +1455,8 @@
                 office.agentTools[targetId].forEach(t => { t.done = true; });
               }
             }
+            // Ritorno immediato al divano lounge
+            setAgentLounge(targetId, true, false);
           }
 
           if (msg.type === 'agentToolsClear') {
@@ -1469,6 +1472,8 @@
                 office.agentTools[targetId].forEach(t => { t.done = true; });
               }
             }
+            // Ritorno immediato al divano lounge
+            setAgentLounge(targetId, true, false);
           }
 
           // Instradamento fisico: un agente (es. Alberto CEO) cammina verso un sottoposto e mostra il popup "Message from Parent Agent"
@@ -1865,9 +1870,9 @@
             ch.wanderTimer = 999999;
           }
         } else {
-          // Quando va al lavoro alla scrivania o riceve un task, imposta un tool attivo
-          // così l'hover overlay del canvas mostra subito lo stato lavorativo attivo!
-          if (office) {
+          // Quando va al lavoro alla scrivania ed è effettivamente in corso un task, mantieni il tool attivo,
+          // altrimenti non iniettare finti tool se l'agente è in idle!
+          if (office && agentWorking[id]) {
             office.agentTools = office.agentTools || {};
             office.agentTools[id] = [{
               name: 'terminal',
