@@ -1395,7 +1395,8 @@
             agentStatuses[targetId] = `⚡ ${desc}`;
             updateStatusDisplay(targetId);
             const office = window.__officeState;
-            if (office && office.agentTools) {
+            if (office) {
+              office.agentTools = office.agentTools || {};
               office.agentTools[targetId] = [{
                 name: msg.toolName || 'tool',
                 detail: desc,
@@ -1416,7 +1417,8 @@
               setAgentLounge(targetId, false, true);
               ensureAgentAtWorkDesk(targetId);
               const office = window.__officeState;
-              if (office && office.agentTools) {
+              if (office) {
+                office.agentTools = office.agentTools || {};
                 office.agentTools[targetId] = [{
                   name: msg.tool || 'activity',
                   detail: msg.status || 'Attività in corso',
@@ -1646,7 +1648,8 @@
         // Il ricevente deve andare subito alla propria scrivania di lavoro al PC
         agentWorking[Number(toId)] = true;
         agentLastActiveAt[Number(toId)] = Date.now();
-        if (office && office.agentTools) {
+        if (office) {
+          office.agentTools = office.agentTools || {};
           office.agentTools[Number(toId)] = [{
             name: 'delegation',
             detail: `Delega operativa in arrivo da ${fromName}`,
@@ -1793,7 +1796,9 @@
       // Rimuove in modo permanente dalle collisioni (blockedTiles) le 8 caselle dei sedili degli agenti (4 sedie PC + 4 divanetti)
       // così il pathfinder BFS non troverà mai le sedute bloccate durante l'avvicinamento, il sedersi o il ripartire.
       function unblockAllAgentSeats(office) {
-        if (!office || !office.blockedTiles || !office.seats) return;
+        if (!office) return;
+        office.agentTools = office.agentTools || {};
+        if (!office.blockedTiles || !office.seats) return;
         [10, 6, 7, 8].forEach(id => {
           const dSeat = office.seats.get(WORK_DESK_SEATS[id]);
           if (dSeat) office.blockedTiles.delete(`${dSeat.seatCol},${dSeat.seatRow}`);
@@ -1862,7 +1867,8 @@
         } else {
           // Quando va al lavoro alla scrivania o riceve un task, imposta un tool attivo
           // così l'hover overlay del canvas mostra subito lo stato lavorativo attivo!
-          if (office.agentTools) {
+          if (office) {
+            office.agentTools = office.agentTools || {};
             office.agentTools[id] = [{
               name: 'terminal',
               detail: 'Attività operativa in corso',
