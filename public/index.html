@@ -1525,14 +1525,18 @@
           if (msg.type === 'tasksQueueUpdated' && Array.isArray(msg.queue)) {
             kanbanTasks = msg.queue;
             renderKanbanBoard();
-            kanbanTasks.forEach(task => {
-              if (task.status === 'running' || task.status === 'dispatched') {
-                const aId = Number(task.agentId);
-                if (aId && agentWorking[aId] !== undefined) {
-                  agentWorking[aId] = true;
-                  agentLastActiveAt[aId] = Date.now();
-                  agentOnSofa[aId] = false;
-                  ensureAgentAtWorkDesk(aId);
+            [10, 6, 7, 8].forEach(aId => {
+              const hasActiveTask = kanbanTasks.some(t => Number(t.agentId) === aId && (t.status === 'running' || t.status === 'dispatched'));
+              if (hasActiveTask) {
+                agentWorking[aId] = true;
+                agentLastActiveAt[aId] = Date.now();
+                agentOnSofa[aId] = false;
+                ensureAgentAtWorkDesk(aId);
+              } else if (!activePermissions[aId]) {
+                agentWorking[aId] = false;
+                const office = window.__officeState;
+                if (office && office.agentTools && office.agentTools[aId]) {
+                  office.agentTools[aId].forEach(t => { t.done = true; });
                 }
               }
             });
@@ -1716,14 +1720,25 @@
             activeDelegationAnim = null;
           }
           if (sender) sender.isDelivering = false;
-          // Segna il completamento dell'animazione di consegna (chi deve continuare a lavorare non viene azzerato a false)
-          if (!office.agentTools || !office.agentTools[Number(toId)] || office.agentTools[Number(toId)].every(t => t.done)) {
-            agentWorking[Number(toId)] = false;
-            agentLastActiveAt[Number(toId)] = Date.now() - 5000;
+
+          // Carlo QA: Sblocca agentWorking per entrambi gli agenti se non hanno task attivi in coda
+          const fId = Number(fromId);
+          const tId = Number(toId);
+          const toHasActiveTask = kanbanTasks && kanbanTasks.some(k => Number(k.agentId) === tId && (k.status === 'running' || k.status === 'dispatched'));
+          if (!toHasActiveTask && !activePermissions[tId]) {
+            agentWorking[tId] = false;
+            agentLastActiveAt[tId] = Date.now();
+            if (office && office.agentTools && office.agentTools[tId]) {
+              office.agentTools[tId].forEach(t => { t.done = true; });
+            }
           }
-          if (!office.agentTools || !office.agentTools[Number(fromId)] || office.agentTools[Number(fromId)].every(t => t.done)) {
-            agentWorking[Number(fromId)] = false;
-            agentLastActiveAt[Number(fromId)] = Date.now() - 5000;
+          const fromHasActiveTask = kanbanTasks && kanbanTasks.some(k => Number(k.agentId) === fId && (k.status === 'running' || k.status === 'dispatched'));
+          if (!fromHasActiveTask && !activePermissions[fId]) {
+            agentWorking[fId] = false;
+            agentLastActiveAt[fId] = Date.now();
+            if (office && office.agentTools && office.agentTools[fId]) {
+              office.agentTools[fId].forEach(t => { t.done = true; });
+            }
           }
 
           // Se chi ha delegato o ricevuto non sta lavorando, si accomoda sul proprio divanetto lounge
@@ -1820,9 +1835,23 @@
         const ch = office.characters.get(id);
         if (!ch) return;
 
+        // Carlo QA: Prevenzione loop - se ha già questo posto ed è già arrivato o sta già camminando, esci subito!
+        const targetSeat = office.seats ? office.seats.get(targetSeatId) : null;
+        const isAlreadyAtSeat = targetSeat && (ch.tileCol === targetSeat.seatCol && ch.tileRow === targetSeat.seatRow);
+        const isAlreadyWalkingToSeat = (ch.seatId === targetSeatId && ch.path && ch.path.length > 0);
+
+        if (ch.seatId === targetSeatId && (isAlreadyAtSeat || isAlreadyWalkingToSeat)) {
+          if (onSofa && isAlreadyAtSeat) {
+            ch.state = 'type';
+            ch.seatTimer = 999999;
+            ch.wanderTimer = 999999;
+            if (targetSeat && targetSeat.facingDir) ch.dir = targetSeat.facingDir;
+          }
+          return;
+        }
+
         unblockAllAgentSeats(office);
 
-        const targetSeat = office.seats ? office.seats.get(targetSeatId) : null;
         const oldSeat = (office.seats && ch.seatId) ? office.seats.get(ch.seatId) : null;
 
         // Disassegna preventivamente i posti per evitare contese
@@ -1854,12 +1883,11 @@
         }
 
         // Se reassignSeat/sendToSeat non ha generato un path e il personaggio non è già al sedile, cammina direttamente alla casella
-        const isAlreadyAtSeat = targetSeat && (ch.tileCol === targetSeat.seatCol && ch.tileRow === targetSeat.seatRow);
         if (!isAlreadyAtSeat && (!ch.path || ch.path.length === 0) && targetSeat && typeof office.walkToTile === 'function') {
           office.walkToTile(id, targetSeat.seatCol, targetSeat.seatRow);
         }
 
-        // Pulisci lo stato dei tool per far risultare lo status 'Idle' nell'hover overlay del canvas
+        // Carlo QA: Rimosso l'iniezione del finto tool attivo. Pulisci lo stato dei tool se l'agente è Idle!
         if (onSofa) {
           if (office.agentTools && office.agentTools[id]) {
             office.agentTools[id].forEach(t => { t.done = true; });
@@ -1868,18 +1896,12 @@
             ch.state = 'type';
             ch.seatTimer = 999999;
             ch.wanderTimer = 999999;
+            if (targetSeat && targetSeat.facingDir) ch.dir = targetSeat.facingDir;
           }
         } else {
-          // Quando va al lavoro alla scrivania ed è effettivamente in corso un task, mantieni il tool attivo,
-          // altrimenti non iniettare finti tool se l'agente è in idle!
-          if (office && agentWorking[id]) {
-            office.agentTools = office.agentTools || {};
-            office.agentTools[id] = [{
-              name: 'terminal',
-              detail: 'Attività operativa in corso',
-              status: 'In esecuzione...',
-              done: false
-            }];
+          // Quando va alla scrivania senza task attivi, pulisci i tool per mostrare Idle in hover
+          if (!agentWorking[id] && office.agentTools && office.agentTools[id]) {
+            office.agentTools[id].forEach(t => { t.done = true; });
           }
         }
       }

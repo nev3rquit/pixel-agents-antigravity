@@ -835,6 +835,14 @@ function sendOfficeInitProtocol(ws) {
     ws.send(JSON.stringify({ type: 'terminalSessionOpened', agentId: a.id }));
   });
 
+  // 5.1 Invio Esplicito di Stato Idle per agenti senza task pendenti (previene tool orfani su refresh)
+  TEAM.forEach(a => {
+    if (!busyIds.has(a.id)) {
+      ws.send(JSON.stringify({ type: 'agentToolsClear', id: a.id, agentId: a.id }));
+      ws.send(JSON.stringify({ type: 'agentStatus', id: a.id, agentId: a.id, status: 'waiting' }));
+    }
+  });
+
   // Invia anche lo stato team compatibile con dashboard custom
   ws.send(JSON.stringify({ type: 'init', team: TEAM }));
   ws.send(JSON.stringify({
@@ -1632,7 +1640,19 @@ function preloadAgentLogs() {
 
 preloadAgentLogs();
 
-const recentDelegations = new Map(); // key -> timestamp per deduplicazione (cooldown 10s)
+const recentDelegations = new Map(); // key -> timestamp per deduplicazione robusta (cooldown 30s)
+
+function getDelegationKey(fromId, toId, text) {
+  let cleanText = String(text || '');
+  const cm = /content=([\s\S]*?)(?:<\/SYSTEM_MESSAGE>|$)/i.exec(cleanText);
+  if (cm) cleanText = cm[1];
+  const clean = cleanText
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .toLowerCase()
+    .slice(0, 45);
+  return `${fromId}->${toId}:${clean}`;
+}
 
 function monitorLiveAntigravity() {
   if (!fs.existsSync(BRAIN_DIR)) return;
@@ -1677,9 +1697,9 @@ function monitorLiveAntigravity() {
                     const fromAgent = TEAM.find(a => a.id === fromAgentId);
                     const contentMatch = /content=([\s\S]*?)(?:<\/SYSTEM_MESSAGE>|$)/i.exec(contentStr);
                     const rawMsg = contentMatch ? contentMatch[1].trim() : contentStr;
-                    const dKey = `${fromAgentId}->${agentId}:${rawMsg.slice(0, 50)}`;
+                    const dKey = getDelegationKey(fromAgentId, agentId, rawMsg);
                     const lastDTime = recentDelegations.get(dKey) || 0;
-                    if (Date.now() - lastDTime > 10000) {
+                    if (Date.now() - lastDTime > 30000) {
                       recentDelegations.set(dKey, Date.now());
                       delegationActiveUntil.set(fromAgentId, Date.now() + 8000);
                       broadcast({
@@ -1729,9 +1749,9 @@ function monitorLiveAntigravity() {
                     const toAgentId = allMap[rawRecip];
                     if (toAgentId && toAgentId !== agentId) {
                       const destAgent = TEAM.find(a => a.id === toAgentId);
-                      const dKey = `${agentId}->${toAgentId}:${rawMsg.slice(0, 50)}`;
+                      const dKey = getDelegationKey(agentId, toAgentId, rawMsg);
                       const lastDTime = recentDelegations.get(dKey) || 0;
-                      if (Date.now() - lastDTime > 10000) {
+                      if (Date.now() - lastDTime > 30000) {
                         recentDelegations.set(dKey, Date.now());
                         delegationActiveUntil.set(agentId, Date.now() + 8000);
                         broadcast({
