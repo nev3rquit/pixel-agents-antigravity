@@ -1708,18 +1708,27 @@
             activeDelegationAnim = null;
           }
           if (sender) sender.isDelivering = false;
-          // Segna il completamento dello scambio in modo che entrambi possano tornare Idle
-          agentWorking[Number(fromId)] = false;
-          agentWorking[Number(toId)] = false;
-          agentLastActiveAt[Number(fromId)] = Date.now() - 5000;
-          agentLastActiveAt[Number(toId)] = Date.now() - 5000;
+          // Segna il completamento dell'animazione di consegna (chi deve continuare a lavorare non viene azzerato a false)
+          if (!office.agentTools || !office.agentTools[Number(toId)] || office.agentTools[Number(toId)].every(t => t.done)) {
+            agentWorking[Number(toId)] = false;
+            agentLastActiveAt[Number(toId)] = Date.now() - 5000;
+          }
+          if (!office.agentTools || !office.agentTools[Number(fromId)] || office.agentTools[Number(fromId)].every(t => t.done)) {
+            agentWorking[Number(fromId)] = false;
+            agentLastActiveAt[Number(fromId)] = Date.now() - 5000;
+          }
 
-          // Se chi ha delegato o ricevuto non ha task pendenti, si accomodano sui rispettivi divanetti lounge
+          // Se chi ha delegato o ricevuto non sta lavorando, si accomoda sul proprio divanetto lounge
           [Number(fromId), Number(toId)].forEach(agId => {
             if (!agentWorking[agId]) {
               agentOnSofa[agId] = true;
               try {
                 moveAgentToSeat(agId, LOUNGE_SOFA_SEATS[agId], true);
+              } catch {}
+            } else {
+              agentOnSofa[agId] = false;
+              try {
+                moveAgentToSeat(agId, WORK_DESK_SEATS[agId], false);
               } catch {}
             }
           });
@@ -1758,8 +1767,8 @@
             parentPopupStep.textContent = tNow.returnStep(shortFrom);
             sender.isDelivering = false;
             try {
-              // Se chi ritorna è Alberto (CEO) o un agente inattivo, torna direttamente sul divano lounge
-              const shouldGoToSofa = (sender.id === 10) || Boolean(agentOnSofa[sender.id]);
+              // Quando la consegna termina, se l'agente è in lavorazione torna alla scrivania, altrimenti al proprio divanetto
+              const shouldGoToSofa = !agentWorking[sender.id];
               agentOnSofa[sender.id] = shouldGoToSofa;
               const targetSeat = shouldGoToSofa ? LOUNGE_SOFA_SEATS[sender.id] : WORK_DESK_SEATS[sender.id];
               moveAgentToSeat(sender.id, targetSeat, shouldGoToSofa);
