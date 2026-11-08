@@ -1394,6 +1394,15 @@
             const desc = msg.status || (msg.toolName ? ('Eseguo: ' + msg.toolName) : 'Comando in esecuzione');
             agentStatuses[targetId] = `⚡ ${desc}`;
             updateStatusDisplay(targetId);
+            const office = window.__officeState;
+            if (office && office.agentTools) {
+              office.agentTools[targetId] = [{
+                name: msg.toolName || 'tool',
+                detail: desc,
+                status: desc,
+                done: false
+              }];
+            }
           }
 
           // Attività o log dettagliato
@@ -1406,6 +1415,15 @@
               agentOnSofa[targetId] = false;
               setAgentLounge(targetId, false, true);
               ensureAgentAtWorkDesk(targetId);
+              const office = window.__officeState;
+              if (office && office.agentTools) {
+                office.agentTools[targetId] = [{
+                  name: msg.tool || 'activity',
+                  detail: msg.status || 'Attività in corso',
+                  status: msg.status || 'In esecuzione...',
+                  done: false
+                }];
+              }
             } else {
               agentWorking[targetId] = false;
               agentLastActiveAt[targetId] = Date.now() - 5000;
@@ -1628,6 +1646,14 @@
         // Il ricevente deve andare subito alla propria scrivania di lavoro al PC
         agentWorking[Number(toId)] = true;
         agentLastActiveAt[Number(toId)] = Date.now();
+        if (office && office.agentTools) {
+          office.agentTools[Number(toId)] = [{
+            name: 'delegation',
+            detail: `Delega operativa in arrivo da ${fromName}`,
+            status: 'In ricezione incarico...',
+            done: false
+          }];
+        }
         setAgentLounge(Number(toId), false, true);
         ensureAgentAtWorkDesk(Number(toId));
 
@@ -1823,6 +1849,17 @@
             ch.state = 'type';
             ch.seatTimer = 999999;
             ch.wanderTimer = 999999;
+          }
+        } else {
+          // Quando va al lavoro alla scrivania o riceve un task, imposta un tool attivo
+          // così l'hover overlay del canvas mostra subito lo stato lavorativo attivo!
+          if (office.agentTools) {
+            office.agentTools[id] = [{
+              name: 'terminal',
+              detail: 'Attività operativa in corso',
+              status: 'In esecuzione...',
+              done: false
+            }];
           }
         }
       }

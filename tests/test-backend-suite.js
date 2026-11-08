@@ -133,7 +133,7 @@ async function runTests() {
       }, 400);
 
       setTimeout(() => {
-        ws.send(JSON.stringify({ type: 'callStandupMeeting', topic: 'Sprint Review Backend Luigi' }));
+        ws.send(JSON.stringify({ type: 'callStandupMeeting', topic: 'Allineamento Generale Team: Sprint Sync' }));
       }, 600);
 
       setTimeout(() => {
@@ -183,7 +183,7 @@ async function runTests() {
       const hasGranularLounge = received.some(m => m.type === 'loungeBreakState' && m.agentId === 6 && Array.isArray(m.agentIds) && m.agentIds.includes(6));
       assert('WS Coordination: breakMode granulare per singolo agente (Luigi id 6) ricevuto', hasGranularLounge);
 
-      const hasStandup = received.some(m => m.type === 'standupMeetingStarted' && m.topic.includes('Sprint Review'));
+      const hasStandup = received.some(m => m.type === 'standupMeetingStarted' && m.topic.includes('Allineamento Generale Team'));
       assert('WS Coordination: standupMeetingStarted broadcast ricevuto', hasStandup);
 
       const hasProjChanged = received.some(m => m.type === 'targetProjectChanged');
