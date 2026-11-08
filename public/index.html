@@ -2005,6 +2005,16 @@
         [10, 6, 7, 8].forEach(id => {
           const ch = office.characters.get(id);
           if (!ch || ch.isDelivering) return; // Se sta camminando per una consegna di delega, non interrompere
+          if (ch.path && ch.path.length > 0) return; // Carlo QA: Lascia completare la camminata, non resettare ogni 2s!
+
+          // Carlo QA: Sblocca agentWorking se non ci sono task in coda e sono passati i secondi di timeout
+          const hasQueueTask = kanbanTasks && kanbanTasks.some(t => Number(t.agentId) === id && (t.status === 'running' || t.status === 'dispatched'));
+          if (!hasQueueTask && !activePermissions[id] && (now - (agentLastActiveAt[id] || 0) > IDLE_LOUNGE_TIMEOUT_MS)) {
+            agentWorking[id] = false;
+            if (office.agentTools && office.agentTools[id]) {
+              office.agentTools[id].forEach(t => { t.done = true; });
+            }
+          }
 
           const isActivelyWorking = Boolean(agentWorking[id]) || (now - (agentLastActiveAt[id] || 0) < IDLE_LOUNGE_TIMEOUT_MS);
 
