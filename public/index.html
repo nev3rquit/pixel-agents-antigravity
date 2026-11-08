@@ -1430,8 +1430,6 @@
             const office = window.__officeState;
             if (office && office.characters) {
               const ch = office.characters.get(targetId);
-              if (ch) ch.isActive = false;
-              if (typeof office.setAgentActive === 'function') office.setAgentActive(targetId, false);
               if (office.agentTools && office.agentTools[targetId]) {
                 office.agentTools[targetId].forEach(t => { t.done = true; });
               }
@@ -1447,8 +1445,6 @@
             const office = window.__officeState;
             if (office && office.characters) {
               const ch = office.characters.get(targetId);
-              if (ch) ch.isActive = false;
-              if (typeof office.setAgentActive === 'function') office.setAgentActive(targetId, false);
               if (office.agentTools && office.agentTools[targetId]) {
                 office.agentTools[targetId].forEach(t => { t.done = true; });
               }
@@ -1798,36 +1794,35 @@
           if (targetSeat) office.blockedTiles.delete(`${targetSeat.seatCol},${targetSeat.seatRow}`);
         }
 
+        // Per camminare, il personaggio DEVE avere isActive = true nel loop del motore Pixel Agents
+        ch.isActive = true;
+
         if (ch.seatId !== targetSeatId) {
           if (typeof office.reassignSeat === 'function') {
             office.reassignSeat(id, targetSeatId);
           }
           if (typeof office.sendToSeat === 'function') {
             office.sendToSeat(id);
-          } else if (targetSeat && typeof office.walkToTile === 'function') {
-            office.walkToTile(id, targetSeat.seatCol, targetSeat.seatRow);
           }
         } else if (typeof office.sendToSeat === 'function') {
           office.sendToSeat(id);
-        } else if (targetSeat && typeof office.walkToTile === 'function') {
+        }
+
+        // Se reassignSeat/sendToSeat non ha generato un path e il personaggio non è già al sedile, cammina direttamente alla casella
+        const isAlreadyAtSeat = targetSeat && (ch.tileCol === targetSeat.seatCol && ch.tileRow === targetSeat.seatRow);
+        if (!isAlreadyAtSeat && (!ch.path || ch.path.length === 0) && targetSeat && typeof office.walkToTile === 'function') {
           office.walkToTile(id, targetSeat.seatCol, targetSeat.seatRow);
         }
 
-        // Configurazione stati di seduta: se sul divano niente wander e niente typing; se alla scrivania attivo per lavorare
+        // Pulisci lo stato dei tool per far risultare lo status 'Idle' nell'hover overlay del canvas
         if (onSofa) {
-          ch.isActive = false;
-          ch.seatTimer = 999999;
-          ch.wanderTimer = 999999;
-          if (typeof office.setAgentActive === 'function') {
-            office.setAgentActive(id, false);
-          }
           if (office.agentTools && office.agentTools[id]) {
             office.agentTools[id].forEach(t => { t.done = true; });
           }
-        } else {
-          ch.isActive = true;
-          if (typeof office.setAgentActive === 'function') {
-            office.setAgentActive(id, true);
+          if (isAlreadyAtSeat) {
+            ch.state = 'type';
+            ch.seatTimer = 999999;
+            ch.wanderTimer = 999999;
           }
         }
       }
@@ -1942,18 +1937,27 @@
             ensureAgentAtWorkDesk(id);
           } else {
             // INATTIVO (IDLE): RITORNA SEDUTO SUL DIVANO IN SALA RELAX SENZA INTASARE IL LOG
+            if (office.agentTools && office.agentTools[id]) {
+              office.agentTools[id].forEach(t => { t.done = true; });
+            }
+            const sofaSeatId = LOUNGE_SOFA_SEATS[id];
+            const sofaSeat = office.seats ? office.seats.get(sofaSeatId) : null;
+            const isAtSofa = sofaSeat && (ch.tileCol === sofaSeat.seatCol && ch.tileRow === sofaSeat.seatRow);
+
             if (!agentOnSofa[id]) {
               setAgentLounge(id, true, false);
-            } else {
-              // Rinforza lo stato di permanenza rilassata sul divanetto
-              ch.isActive = false;
-              ch.seatTimer = 999999;
-              ch.wanderTimer = 999999;
-              const sofaSeatId = LOUNGE_SOFA_SEATS[id];
-              const sofaSeat = office.seats ? office.seats.get(sofaSeatId) : null;
-              if (sofaSeat && (ch.seatId !== sofaSeatId || (ch.path && ch.path.length === 0 && (ch.tileCol !== sofaSeat.seatCol || ch.tileRow !== sofaSeat.seatRow)))) {
+            } else if (!isAtSofa) {
+              // Se è in transito verso il divano o si è alzato, assicurati che stia camminando verso il divano
+              ch.isActive = true;
+              if (!ch.path || ch.path.length === 0) {
                 moveAgentToSeat(id, sofaSeatId, true);
               }
+            } else {
+              // Rinforza lo stato di permanenza rilassata sul divanetto
+              ch.state = 'type';
+              ch.seatTimer = 999999;
+              ch.wanderTimer = 999999;
+              if (sofaSeat && sofaSeat.facingDir) ch.dir = sofaSeat.facingDir;
             }
           }
         });
