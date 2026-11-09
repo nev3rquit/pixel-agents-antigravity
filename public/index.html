@@ -2,8 +2,15 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>AziendaAI Office — Sala Operativa Ufficiale</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#161b22" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AziendaAI" />
+    <link rel="apple-touch-icon" href="./icons/icon-256.png" />
     <link rel="icon" type="image/png" href="./icons/icon-256.png?v=2" />
     <link rel="stylesheet" crossorigin href="./assets/index-B4KUBY28.css" />
     <style>
@@ -507,6 +514,108 @@
       .command-bar button:hover {
         background: #2ea043;
       }
+
+      /* MOBILE TOUCH CONTROLS & RESPONSIVE LAYOUT (IDEA #7 PWA) */
+      .touch-controls {
+        display: none;
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        z-index: 1100;
+        gap: 8px;
+        background: rgba(13, 17, 23, 0.85);
+        backdrop-filter: blur(8px);
+        padding: 6px 10px;
+        border-radius: 30px;
+        border: 1px solid #30363d;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      }
+      .touch-btn {
+        background: #21262d;
+        border: 1px solid #30363d;
+        color: #e6edf3;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.15s, background 0.15s;
+      }
+      .touch-btn:active {
+        transform: scale(0.92);
+        background: #388bfd;
+      }
+      #mobile-drawer-toggle {
+        display: none;
+        position: fixed;
+        bottom: 18px;
+        right: 18px;
+        z-index: 1200;
+        background: #238636;
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+        border-radius: 30px;
+        padding: 10px 18px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        gap: 8px;
+      }
+
+      @media (max-width: 860px) {
+        .touch-controls {
+          display: flex;
+        }
+        #mobile-drawer-toggle {
+          display: flex;
+        }
+        header {
+          padding: 6px 10px;
+          height: auto;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .brand h1 {
+          font-size: 0.95rem;
+        }
+        .brand .badge {
+          display: none;
+        }
+        .team-bar {
+          overflow-x: auto;
+          max-width: 100%;
+          padding-bottom: 2px;
+        }
+        .agent-pill {
+          padding: 3px 8px;
+          font-size: 0.75rem;
+        }
+        #agent-drawer {
+          position: fixed;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          max-width: 420px;
+          transform: translateX(100%);
+          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          z-index: 2000;
+          box-shadow: -8px 0 28px rgba(0, 0, 0, 0.7);
+        }
+        #agent-drawer.mobile-open {
+          transform: translateX(0);
+        }
+        #mobile-drawer-close {
+          display: inline-flex !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -529,7 +638,19 @@
       <!-- MOTORE NATIVO PIXEL AGENTS: STANZA, ARREDI, FISICA E ANIMAZIONI -->
       <div id="office-frame-container">
         <div id="root"></div>
+
+        <!-- TOUCH CONTROLS PER MOBILE / PWA -->
+        <div class="touch-controls" id="touch-zoom-controls">
+          <button class="touch-btn" onclick="mobileZoom(1.2)" title="Zoom In">➕</button>
+          <button class="touch-btn" onclick="mobileZoom(0.8)" title="Zoom Out">➖</button>
+          <button class="touch-btn" onclick="mobileResetView()" title="Reset Vista" style="font-size:0.85rem;">🎯</button>
+        </div>
       </div>
+
+      <!-- BOTTONE FLUTTUANTE MOBILE PER APRIRE LA CONSOLE AGENTE -->
+      <button id="mobile-drawer-toggle" onclick="toggleMobileDrawer()">
+        <span>💬 Console Agente</span>
+      </button>
 
       <!-- TENDINA / CONSOLE LATERALE DELL'AGENTE SELEZIONATO -->
       <div id="agent-drawer">
@@ -538,6 +659,7 @@
             <div class="drawer-title">
               <span id="drawer-agent-avatar">👔</span>
               <span id="drawer-agent-name">Alberto (CEO)</span>
+              <button id="mobile-drawer-close" onclick="toggleMobileDrawer()" style="display:none; background:transparent; border:none; color:#8b949e; font-size:1.2rem; cursor:pointer; margin-left:10px;">✕</button>
             </div>
             <div class="drawer-desc" id="drawer-agent-role">CEO & Orchestrator</div>
             <!-- BANNER ATTIVITÀ SINCRONIZZATO CON L'HOVER TOOLTIP -->
@@ -2499,6 +2621,54 @@
           targetAgent.name,
           sampleTasks[targetAgent.id] || 'Procedi con il task assegnato e riporta l\'esito.'
         );
+      };
+
+      // REGISTRAZIONE PWA SERVICE WORKER & TOUCH CONTROLS (IDEA #7)
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+              console.log('[PWA] Service Worker registrato con successo:', reg.scope);
+            })
+            .catch(err => {
+              console.warn('[PWA] Registrazione Service Worker fallita:', err);
+            });
+        });
+      }
+
+      window.toggleMobileDrawer = function() {
+        const drawer = document.getElementById('agent-drawer');
+        if (drawer) {
+          drawer.classList.toggle('mobile-open');
+        }
+      };
+
+      window.mobileZoom = function(factor) {
+        const office = window.__officeState;
+        if (office && typeof office.zoom === 'number') {
+          office.zoom = Math.max(0.5, Math.min(3.0, office.zoom * factor));
+        } else {
+          const canvas = document.querySelector('#office-frame-container canvas');
+          if (canvas) {
+            const currentScale = parseFloat(canvas.getAttribute('data-scale') || '1');
+            const nextScale = Math.max(0.5, Math.min(2.5, currentScale * factor));
+            canvas.setAttribute('data-scale', nextScale);
+            canvas.style.transform = `scale(${nextScale})`;
+            canvas.style.transformOrigin = 'center center';
+          }
+        }
+      };
+
+      window.mobileResetView = function() {
+        const office = window.__officeState;
+        if (office && typeof office.zoom === 'number') {
+          office.zoom = 1.0;
+        }
+        const canvas = document.querySelector('#office-frame-container canvas');
+        if (canvas) {
+          canvas.setAttribute('data-scale', '1');
+          canvas.style.transform = 'scale(1)';
+        }
       };
     </script>
 
