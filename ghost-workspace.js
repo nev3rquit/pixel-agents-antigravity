@@ -19,6 +19,54 @@ try {
   }
 } catch (_) {}
 
+// File segreti mai copiati nella sandbox
+const SECRET_FILE_RE = /^(\.env.*|discord\.config\.json|.*\.(pem|key|pfx)|.*token.*|.*secret.*|id_rsa.*)$/i;
+
+// Sweep all'avvio: elimina sandbox residue
+try {
+  for (const d of fs.readdirSync(GHOST_ROOT)) {
+    if (d.startsWith('ghost_')) fs.rmSync(path.join(GHOST_ROOT, d), { recursive: true, force: true });
+  }
+} catch (_) {}
+
+const LOCAL_ALLOWED_BINS = new Set(['node', 'git', 'python', 'python3']);
+
+// Tokenizer quote-aware: nessuna shell coinvolta => nessuna command injection
+function tokenizeCommand(cmd) {
+  const tokens = [];
+  let cur = '', quote = null, has = false;
+  for (const ch of cmd) {
+    if (quote) {
+      if (ch === quote) quote = null; else cur += ch;
+    } else if (ch === '"' || ch === "'") { quote = ch; has = true; }
+    else if (/\s/.test(ch)) { if (has || cur) { tokens.push(cur); cur = ''; has = false; } }
+    else { cur += ch; }
+  }
+  if (quote) return null;
+  if (has || cur) tokens.push(cur);
+  return tokens;
+}
+
+// Valida projectPath: directory esistente, senza caratteri che alterano il mount docker
+function validateProjectPath(p) {
+  const resolved = path.resolve(String(p || process.cwd()));
+  if (/[\0\r\n,"]/.test(resolved) || resolved.slice(2).includes(':')) throw new Error('projectPath non valido');
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw new Error("projectPath non e' una directory esistente");
+  return resolved;
+}
+
+function sanitizeImageName(image) {
+  if (!image || typeof image !== 'string') return 'node:alpine';
+  const trimmed = image.trim();
+  // Valid docker image regex: optional registry/namespace, repository name, optional tag or digest
+  // Stretto: nome minuscolo che inizia con alfanumerico, opzionale namespace e tag (es. node:alpine)
+  const validPattern = /^[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)*(?::[a-zA-Z0-9][a-zA-Z0-9_.-]*)?$/;
+  if (!validPattern.test(trimmed) || trimmed.length > 128) {
+    return 'node:alpine';
+  }
+  return trimmed;
+}
+
 /**
  * Controlla se Docker è installato e se il daemon è attualmente attivo.
  */
@@ -51,7 +99,10 @@ function checkDockerStatus() {
 async function executeGhostCommand({ command, projectPath, imageName = 'node:alpine', timeoutMs = 30000 }) {
   const startTime = Date.now();
   const cleanCmd = String(command || '').trim();
-  const targetDir = projectPath || process.cwd();
+  let targetDir;
+  try { targetDir = validateProjectPath(projectPath); } catch (e) { return { success: false, exitCode: 1, output: 'Ghost: ' + e.message, engine: 'none', durationMs: 0 }; }
+  const safeImageName = sanitizeImageName(imageName);
+  const parsedTimeout = Math.min(Math.max(Number(timeoutMs) || 30000, 1000), 120000);
 
   if (!cleanCmd) {
     return {
@@ -71,27 +122,39 @@ async function executeGhostCommand({ command, projectPath, imageName = 'node:alp
     return new Promise((resolve) => {
       // Normalizzazione del path Windows per Docker (es. C:\foo -> //c/foo o c:/foo)
       const dockerPath = targetDir.replace(/\\/g, '/');
+      const containerName = `ghost_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const dockerArgs = [
         'run',
         '--rm',
-        '--network', 'none', // Sandbox isolata senza accesso rete esterno per sicurezza
+        '--name', containerName,
+        '--network', 'none', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+        '--read-only', '--tmpfs', '/tmp', '--pids-limit', '128', '--memory', '256m', '--cpus', '1',
+        '--user', '1000:1000',
         '-v', `${dockerPath}:/workspace:ro`,
         '-w', '/workspace',
-        imageName,
+        '--',
+        safeImageName,
         'sh', '-c', cleanCmd
       ];
 
-      execFile('docker', dockerArgs, { timeout: timeoutMs, windowsHide: true }, (err, stdout, stderr) => {
+      execFile('docker', dockerArgs, { timeout: parsedTimeout, windowsHide: true }, (err, stdout, stderr) => {
+        if (err && (err.killed || err.signal === 'SIGTERM')) {
+          try { execFile('docker', ['rm', '-f', containerName], { timeout: 10000, windowsHide: true }, () => {}); } catch (_) {}
+        }
         const durationMs = Date.now() - startTime;
         const exitCode = err ? (err.code || 1) : 0;
-        const out = (stdout || stderr || (err ? err.message : '')).trim();
+        const isTimeout = err && (err.killed || err.signal === 'SIGTERM' || durationMs >= parsedTimeout);
+        let out = (stdout || stderr || (err ? err.message : '')).trim();
+        if (isTimeout) {
+          out = `[TIMEOUT] Esecuzione interrotta dopo ${parsedTimeout}ms.\n${out}`.trim();
+        }
 
         resolve({
-          success: exitCode === 0,
-          exitCode: exitCode,
+          success: exitCode === 0 && !isTimeout,
+          exitCode: isTimeout ? 124 : exitCode,
           output: out || (exitCode === 0 ? 'Comando Ghost completato nel container con successo.' : 'Errore esecuzione container.'),
           engine: 'docker',
-          containerImage: imageName,
+          containerImage: safeImageName,
           durationMs
         });
       });
@@ -108,19 +171,28 @@ async function executeGhostCommand({ command, projectPath, imageName = 'node:alp
         // Copia leggera dei soli file manifest e config (package.json, js, ecc.) senza node_modules pesanti
         copyShallowProject(targetDir, sandboxDir);
 
-        // Esegui il comando confinato nella cartella sandbox
-        const isWin = process.platform === 'win32';
-        const shellCmd = isWin ? `cmd.exe /d /s /c "${cleanCmd}"` : cleanCmd;
+        // Esecuzione SENZA shell (execFile) con allowlist binari: niente command injection
+        const argv = tokenizeCommand(cleanCmd);
+        const bin = argv && argv[0] ? path.basename(argv[0]).toLowerCase().replace(/\.exe$/, '') : '';
+        if (!argv || !argv.length || argv[0] !== path.basename(argv[0]) || !LOCAL_ALLOWED_BINS.has(bin)) {
+          try { fs.rmSync(sandboxDir, { recursive: true, force: true }); } catch (_) {}
+          return resolve({ success: false, exitCode: 126, output: 'Ghost locale: comando non consentito. Binari ammessi senza Docker: ' + [...LOCAL_ALLOWED_BINS].join(', '), engine: 'local-ghost', sandboxId, durationMs: Date.now() - startTime });
+        }
+        const safeEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: sandboxDir, TMP: sandboxDir, HOME: sandboxDir, USERPROFILE: sandboxDir, GHOST_SANDBOX: '1', NODE_ENV: 'test' };
 
-        exec(shellCmd, {
+        execFile(argv[0], argv.slice(1), {
           cwd: sandboxDir,
-          timeout: timeoutMs,
+          timeout: parsedTimeout,
           windowsHide: true,
-          env: { ...process.env, GHOST_SANDBOX: '1', NODE_ENV: 'test' }
+          env: safeEnv,
         }, (err, stdout, stderr) => {
           const durationMs = Date.now() - startTime;
           const exitCode = err ? (err.code || 1) : 0;
+          const isTimeout = err && (err.killed || err.signal === 'SIGTERM' || durationMs >= parsedTimeout);
           let out = (stdout || stderr || (err ? err.message : '')).trim();
+          if (isTimeout) {
+            out = `[TIMEOUT] Esecuzione sandbox locale interrotta dopo ${parsedTimeout}ms.\n${out}`.trim();
+          }
 
           // Pulizia immediata della sandbox temporanea
           try {
@@ -128,8 +200,8 @@ async function executeGhostCommand({ command, projectPath, imageName = 'node:alp
           } catch (_) {}
 
           resolve({
-            success: exitCode === 0,
-            exitCode: exitCode,
+            success: exitCode === 0 && !isTimeout,
+            exitCode: isTimeout ? 124 : exitCode,
             output: out || (exitCode === 0 ? 'Ghost Sandbox Locale: esecuzione terminata con successo.' : 'Errore esecuzione sandbox locale.'),
             engine: 'local-ghost',
             sandboxId: sandboxId,
@@ -156,7 +228,7 @@ function copyShallowProject(src, dest) {
   try {
     const entries = fs.readdirSync(src, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === 'scratch') {
+      if (SECRET_FILE_RE.test(entry.name) || entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === 'scratch') {
         continue;
       }
       const sPath = path.join(src, entry.name);
@@ -167,7 +239,7 @@ function copyShallowProject(src, dest) {
         try {
           const subEntries = fs.readdirSync(sPath, { withFileTypes: true });
           for (const sub of subEntries) {
-            if (sub.isFile()) {
+            if (sub.isFile() && !SECRET_FILE_RE.test(sub.name)) {
               fs.copyFileSync(path.join(sPath, sub.name), path.join(dPath, sub.name));
             }
           }

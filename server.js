@@ -1447,6 +1447,13 @@ app.get('/api/ghost/status', async (req, res) => {
 
 app.post('/api/ghost/run', async (req, res) => {
   const { command, imageName, timeoutMs } = req.body || {};
+  if (!command || typeof command !== 'string' || !command.trim()) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Parametro "command" obbligatorio e non vuoto.'
+    });
+  }
+
   const projPath = routing.getTargetProject() || WORKSPACE_DIR;
   try {
     const result = await ghostWorkspace.executeGhostCommand({
@@ -1455,15 +1462,22 @@ app.post('/api/ghost/run', async (req, res) => {
       imageName: imageName || 'node:alpine',
       timeoutMs: timeoutMs || 30000
     });
-    broadcast({
-      type: 'ghostCommandResult',
-      command,
-      result,
-      source: 'REST API'
-    });
+
+    try {
+      broadcast({
+        type: 'ghostCommandResult',
+        command,
+        result,
+        source: 'REST API'
+      });
+    } catch (bErr) {
+      console.warn('[Ghost] Errore broadcast WS:', bErr.message);
+    }
+
     res.json({ ok: true, ...result });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('[Ghost] Errore esecuzione ghost command:', err);
+    res.status(500).json({ ok: false, error: err.message || 'Errore interno durante esecuzione ghost command' });
   }
 });
 
@@ -1882,7 +1896,7 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   console.log('================================================================');
   console.log(`  🏢 AZIENDA AI OFFICE - SALA OPERATIVA NATIVA`);
   console.log(`  🌐 Dashboard Web: http://localhost:${PORT}`);

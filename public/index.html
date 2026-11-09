@@ -704,6 +704,23 @@
               <span id="label-claude-quota" style="color:#8b949e;">🧠 Quota Claude (5h / Settimana):</span>
               <strong id="global-claude-quota" style="color:#3fb950;">-- / --</strong>
             </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#8b949e;">👻 Ghost Sandbox:</span>
+              <strong id="ghost-status-indicator" style="color:#d2a8ff;" title="">--</strong>
+            </div>
+            <script>
+              (function pollGhostStatus() {
+                const el = document.getElementById('ghost-status-indicator');
+                const upd = () => fetch('/api/ghost/status').then(r => r.json()).then(d => {
+                  if (!el) return;
+                  const isDocker = d && d.available;
+                  el.textContent = 'Attivo (' + (isDocker ? 'Docker' : 'Local Isolation') + ')';
+                  el.title = d.status || '';
+                  el.style.color = '#d2a8ff';
+                }).catch(() => { if (el) { el.textContent = 'Non raggiungibile'; el.style.color = '#da3633'; } });
+                upd(); setInterval(upd, 30000);
+              })();
+            </script>
           </div>
         </div>
 
@@ -2407,10 +2424,18 @@
                   ${escapeHtml(p.path)}
                 </div>
               </div>
-              ${isAct ? '' : `<button onclick="switchDirectProject('${escapeHtml(p.path).replace(/'/g, "\\'")}')" style="background:#21262d; hover:background:#30363d; color:#58a6ff; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:0.74rem; font-weight:600; cursor:pointer; white-space:nowrap;">Attiva 👉</button>`}
+              ${isAct ? '' : `<button class="project-activate-btn" data-path="${encodeURIComponent(p.path)}" style="background:#21262d; color:#58a6ff; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:0.74rem; font-weight:600; cursor:pointer; white-space:nowrap;">Attiva 👉</button>`}
             </div>
           `;
         }).join('');
+        if (!container.dataset.delegated) {
+          container.dataset.delegated = '1';
+          container.addEventListener('click', ev => {
+            const btn = ev.target.closest('.project-activate-btn');
+            if (!btn || !container.contains(btn)) return;
+            window.switchDirectProject(decodeURIComponent(btn.dataset.path));
+          });
+        }
       }
 
       window.switchDirectProject = async function(pPath) {
@@ -2633,14 +2658,15 @@
         })
         .then(r => r.json())
         .then(data => {
-          playRetroSound(data.success ? 'complete' : 'permission');
+          const failed = data.ok === false || (data.success === undefined && data.error);
+          playRetroSound(!failed && data.success ? 'complete' : 'permission');
           const item = {
             isCmdBox: true,
             isGhost: true,
             engine: data.engine,
             cmd: cmd,
-            output: data.output || 'Esecuzione completata.',
-            code: data.exitCode || 0,
+            output: data.output || data.error || 'Esecuzione completata.',
+            code: failed ? (data.exitCode || 1) : (data.exitCode || 0),
             time: new Date().toLocaleTimeString()
           };
           agentLogs[selectedId] = agentLogs[selectedId] || [];
