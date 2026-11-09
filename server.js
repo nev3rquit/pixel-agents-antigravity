@@ -351,7 +351,43 @@ function dispatchRealTask(agent, rawInput) {
 }
 
 app.use(express.json());
-app.use(express.static(PUBLIC_DIR));
+// Servizio dedicato PWA & Mobile Touch (Idea #7)
+app.get('/sw.js', (req, res) => {
+  const swPath = path.join(PUBLIC_DIR, 'sw.js');
+  if (fs.existsSync(swPath)) {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(swPath);
+  } else {
+    res.status(404).send('Service Worker non trovato');
+  }
+});
+
+app.get(['/manifest.json', '/manifest.webmanifest'], (req, res) => {
+  const reqPath = req.path.endsWith('.webmanifest') ? 'manifest.webmanifest' : 'manifest.json';
+  const manifestPath = path.join(PUBLIC_DIR, reqPath);
+  if (fs.existsSync(manifestPath)) {
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(manifestPath);
+  } else {
+    res.status(404).json({ error: 'Manifest non trovato' });
+  }
+});
+
+app.use(express.static(PUBLIC_DIR, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('sw.js')) {
+      res.setHeader('Service-Worker-Allowed', '/');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+    if (filePath.endsWith('manifest.json') || filePath.endsWith('manifest.webmanifest')) {
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  }
+}));
 
 // Helper: Converte RGBA a stringa hex (#RRGGBB o #RRGGBBAA)
 function colorToHex(r, g, b, a) {

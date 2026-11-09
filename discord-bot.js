@@ -157,6 +157,11 @@ function initDiscordBot(onBroadcast) {
         await message.channel.send('⛔ Non autorizzato a usare !ghost / !sandbox.').catch(() => {});
         return;
       }
+      const isAllowedChannel = channelName.includes('sala-operativa') || channelName.includes('admin') || channelName.includes('dev') || channelName.includes('ghost') || channelName.includes('sandbox');
+      if (!isAllowedChannel && !isAdmin) {
+        await message.channel.send('⛔ Il comando `!ghost` può essere eseguito solo in canali autorizzati (#sala-operativa o canali dev/admin).').catch(() => {});
+        return;
+      }
       if (!gCmd) {
         const dStatus = await ghostWorkspace.checkDockerStatus();
         await message.channel.send(`👻 **Ghost Workspace Sandbox Status:**\n• **Motore:** \`${dStatus.engine}\`\n• **Stato:** ${dStatus.status}\`\n\n💡 *Usa \`!ghost <comando>\` per eseguire test o script in ambiente isolato senza toccare i file reali!*`).catch(() => {});

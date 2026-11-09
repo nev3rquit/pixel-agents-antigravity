@@ -20,7 +20,7 @@ try {
 } catch (_) {}
 
 // File segreti mai copiati nella sandbox
-const SECRET_FILE_RE = /^(\.env.*|discord\.config\.json|.*\.(pem|key|pfx)|.*token.*|.*secret.*|id_rsa.*)$/i;
+const SECRET_FILE_RE = /^(\.env.*|discord\.config\.json|agents\.config\.json|team\.config\.json|crash\.log|.*\.(pem|key|pfx)|.*token.*|.*secret.*|id_rsa.*)$/i;
 
 // Sweep all'avvio: elimina sandbox residue
 try {

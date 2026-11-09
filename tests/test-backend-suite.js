@@ -28,9 +28,9 @@ function httpRequest(method, urlPath, body = null) {
       res.on('data', chunk => raw += chunk);
       res.on('end', () => {
         try {
-          resolve({ status: res.statusCode, body: raw ? JSON.parse(raw) : null });
+          resolve({ status: res.statusCode, headers: res.headers, body: raw ? JSON.parse(raw) : null });
         } catch (e) {
-          resolve({ status: res.statusCode, rawBody: raw });
+          resolve({ status: res.statusCode, headers: res.headers, rawBody: raw });
         }
       });
     });
@@ -130,6 +130,17 @@ async function runTests() {
   const postGhostArb = await httpRequest('POST', '/api/ghost/run', { command: 'node -e "console.log(12345)"' });
   const arbDockerOff = postGhostArb.body && postGhostArb.body.engine === 'local-ghost';
   assert('POST /api/ghost/run: comando arbitrario rifiutato se Docker spento', !arbDockerOff || (postGhostArb.body.success === false && postGhostArb.body.exitCode === 126));
+
+  // PWA & SERVICE WORKER TESTS (IDEA #7)
+  const getSw = await httpRequest('GET', '/sw.js');
+  assert('GET /sw.js risponde 200', getSw.status === 200);
+  assert('GET /sw.js header Service-Worker-Allowed è /', getSw.headers && getSw.headers['service-worker-allowed'] === '/');
+  assert('GET /sw.js content-type è javascript', getSw.headers && String(getSw.headers['content-type']).includes('javascript'));
+
+  const getManifest = await httpRequest('GET', '/manifest.json');
+  assert('GET /manifest.json risponde 200', getManifest.status === 200);
+  assert('GET /manifest.json content-type è application/manifest+json', getManifest.headers && String(getManifest.headers['content-type']).includes('manifest+json'));
+  assert('GET /manifest.json contiene nome e start_url', getManifest.body && Boolean(getManifest.body.name && getManifest.body.start_url));
 
   console.log('\n--- 3. Collaudo WebSocket & Sincronizzazione Live ---');
 
