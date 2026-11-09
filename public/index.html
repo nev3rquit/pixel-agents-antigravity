@@ -730,15 +730,25 @@
           </div>
           <button onclick="closeProjectModal()" style="background:#da3633; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.78rem; font-weight:700; cursor:pointer;">✕</button>
         </div>
-        <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
-          <p id="project-modal-desc" style="font-size: 0.82rem; color: #8b949e; line-height: 1.45;">
-            Indica il percorso assoluto della cartella su cui vuoi far lavorare Alberto (CEO), Luigi, Gabri e Carlo (puoi cambiarlo anche da Discord con <code style="color:#58a6ff;">!project &lt;percorso&gt;</code>).
+        <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+          <p id="project-modal-desc" style="font-size: 0.82rem; color: #8b949e; line-height: 1.45; margin:0;">
+            🏢 <strong>Multi-Repo Software House:</strong> Seleziona un progetto salvato con 1-click o registrane uno nuovo. Il team (Alberto, Luigi, Gabri, Carlo) lavorerà nel contesto di quella cartella.
           </p>
-          <input id="project-path-input" type="text" placeholder="Es: C:\Users\Alberto\Desktop\MioProgetto" style="background:#161b22; border:1px solid #30363d; color:#f0f6fc; padding:10px 12px; border-radius:6px; font-family:Consolas,monospace; font-size:0.86rem; outline:none;" />
-          <div id="project-error-msg" style="display:none; color:#ff7b72; font-size:0.78rem;"></div>
-          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
-            <button id="project-cancel-btn" onclick="closeProjectModal()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px 14px; font-size:0.82rem; cursor:pointer;">Annulla</button>
-            <button id="project-save-btn" onclick="saveTargetProject()" style="background:#238636; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:0.82rem; font-weight:700; cursor:pointer;">✅ Imposta Progetto</button>
+          <div>
+            <div style="font-size:0.76rem; font-weight:700; color:#c9d1d9; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">📁 Progetti Registrati</div>
+            <div id="project-saved-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto; padding-right:4px;"></div>
+          </div>
+          <div style="border-top:1px solid #21262d; padding-top:12px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:0.76rem; font-weight:700; color:#c9d1d9; text-transform:uppercase; letter-spacing:0.5px;">➕ Aggiungi / Imposta Nuovo Progetto</div>
+            <div style="display:flex; gap:8px;">
+              <input id="project-name-input" type="text" placeholder="Nome (es: E-Commerce)" style="width:140px; background:#161b22; border:1px solid #30363d; color:#f0f6fc; padding:9px 12px; border-radius:6px; font-size:0.84rem; outline:none;" />
+              <input id="project-path-input" type="text" placeholder="Percorso assoluto (es: C:\Users\...)" style="flex:1; background:#161b22; border:1px solid #30363d; color:#f0f6fc; padding:9px 12px; border-radius:6px; font-family:Consolas,monospace; font-size:0.84rem; outline:none;" />
+            </div>
+            <div id="project-error-msg" style="display:none; color:#ff7b72; font-size:0.78rem;"></div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button id="project-cancel-btn" onclick="closeProjectModal()" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:8px 14px; font-size:0.82rem; cursor:pointer;">Chiudi</button>
+            <button id="project-save-btn" onclick="saveTargetProject()" style="background:#238636; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:0.82rem; font-weight:700; cursor:pointer;">💾 Salva & Attiva</button>
           </div>
         </div>
       </div>
@@ -2237,6 +2247,56 @@
       // INNOVAZIONE #4: SELETTORE PROGETTO TARGET (MULTI-WORKSPACE)
       // =========================================================================
       let currentProjectPath = '';
+      let registeredProjects = [];
+
+      function renderProjectsListUI() {
+        const container = document.getElementById('project-saved-list');
+        if (!container) return;
+        if (!registeredProjects || registeredProjects.length === 0) {
+          container.innerHTML = '<div style="color:#8b949e; font-size:0.78rem; font-style:italic;">Nessun progetto registrato.</div>';
+          return;
+        }
+        container.innerHTML = registeredProjects.map(p => {
+          const isAct = p.isActive;
+          const bg = isAct ? 'rgba(56, 139, 253, 0.15)' : '#161b22';
+          const border = isAct ? '#58a6ff' : '#30363d';
+          const badge = isAct ? '<span style="background:#238636; color:#fff; font-size:0.68rem; padding:2px 6px; border-radius:10px; font-weight:700;">ATTIVO</span>' : '';
+          return `
+            <div style="display:flex; align-items:center; justify-content:space-between; background:${bg}; border:1px solid ${border}; border-radius:6px; padding:7px 10px;">
+              <div style="display:flex; flex-direction:column; gap:2px; overflow:hidden; padding-right:8px;">
+                <div style="font-size:0.82rem; font-weight:600; color:#f0f6fc; display:flex; align-items:center; gap:6px;">
+                  ${escapeHtml(p.name)} ${badge}
+                </div>
+                <div style="font-size:0.71rem; color:#8b949e; font-family:Consolas,monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+                  ${escapeHtml(p.path)}
+                </div>
+              </div>
+              ${isAct ? '' : `<button onclick="switchDirectProject('${escapeHtml(p.path).replace(/'/g, "\\'")}')" style="background:#21262d; hover:background:#30363d; color:#58a6ff; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:0.74rem; font-weight:600; cursor:pointer; white-space:nowrap;">Attiva 👉</button>`}
+            </div>
+          `;
+        }).join('');
+      }
+
+      window.switchDirectProject = async function(pPath) {
+        try {
+          const res = await fetch('/api/project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectPath: pPath })
+          });
+          const data = await res.json();
+          if (data && data.ok) {
+            currentProjectPath = data.projectPath;
+            if (Array.isArray(data.projects)) registeredProjects = data.projects;
+            const nameEl = document.getElementById('active-project-name');
+            if (nameEl) nameEl.textContent = data.projectName;
+            renderProjectsListUI();
+            closeProjectModal();
+            const time = new Date().toLocaleTimeString();
+            appendLog(10, `[${time}] 📂 Progetto Target cambiato su: ${data.projectName} (${data.projectPath})`, 'done');
+          }
+        } catch {}
+      };
 
       async function fetchActiveProject() {
         try {
@@ -2244,10 +2304,12 @@
           const data = await res.json();
           if (data && data.projectPath) {
             currentProjectPath = data.projectPath;
+            if (Array.isArray(data.projects)) registeredProjects = data.projects;
             const nameEl = document.getElementById('active-project-name');
             if (nameEl) nameEl.textContent = data.projectName || data.projectPath.split(/[\\/]/).pop();
             const btnEl = document.getElementById('project-switcher-btn');
             if (btnEl) btnEl.title = `Progetto Attivo: ${data.projectPath}`;
+            renderProjectsListUI();
           }
         } catch {}
       }
@@ -2255,9 +2317,12 @@
       window.openProjectModal = function() {
         const el = document.getElementById('project-modal-overlay');
         const inp = document.getElementById('project-path-input');
+        const nameInp = document.getElementById('project-name-input');
         const err = document.getElementById('project-error-msg');
         if (err) err.style.display = 'none';
         if (inp) inp.value = currentProjectPath;
+        if (nameInp) nameInp.value = '';
+        renderProjectsListUI();
         if (el) el.style.display = 'flex';
       };
 
@@ -2268,14 +2333,16 @@
 
       window.saveTargetProject = async function() {
         const inp = document.getElementById('project-path-input');
+        const nameInp = document.getElementById('project-name-input');
         const err = document.getElementById('project-error-msg');
         const newPath = inp ? inp.value.trim() : '';
+        const newName = nameInp ? nameInp.value.trim() : '';
         if (!newPath) return;
         try {
           const res = await fetch('/api/project', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectPath: newPath })
+            body: JSON.stringify({ projectPath: newPath, projectName: newName || undefined })
           });
           const data = await res.json();
           if (!res.ok || !data.ok) {
@@ -2286,11 +2353,13 @@
             return;
           }
           currentProjectPath = data.projectPath;
+          if (Array.isArray(data.projects)) registeredProjects = data.projects;
           const nameEl = document.getElementById('active-project-name');
           if (nameEl) nameEl.textContent = data.projectName;
+          renderProjectsListUI();
           closeProjectModal();
           const time = new Date().toLocaleTimeString();
-          appendLog(10, `[${time}] 📂 Progetto Target cambiato su: ${data.projectPath}`, 'done');
+          appendLog(10, `[${time}] 📂 Progetto Target cambiato su: ${data.projectName} (${data.projectPath})`, 'done');
         } catch (e) {
           if (err) {
             err.textContent = e.message;

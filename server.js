@@ -1039,6 +1039,7 @@ async function getLiveQuotaAndModels() {
 
     const tr = routing.updateMode({
       g5h: g5hFrac,
+      gWeekly: gWeeklyFrac,
       c5h: c5hFrac,
       cWeekly: cWeeklyFrac,
       resumeAt: earliestWakeHM,
@@ -1413,12 +1414,12 @@ app.get('/api/team', (req, res) => {
 
 app.get('/api/project', (req, res) => {
   const cur = routing.getTargetProject();
-  res.json({ projectPath: cur, projectName: path.basename(cur) });
+  res.json({ projectPath: cur, projectName: path.basename(cur), projects: routing.getProjectsList() });
 });
 
 app.post('/api/project', (req, res) => {
-  const { projectPath } = req.body || {};
-  const result = routing.setTargetProject(projectPath);
+  const { projectPath, projectName } = req.body || {};
+  const result = projectName ? routing.addProjectToRegistry(projectName, projectPath) : routing.setTargetProject(projectPath);
   if (!result.ok) {
     return res.status(400).json({ ok: false, error: result.error });
   }
@@ -1426,9 +1427,10 @@ app.post('/api/project', (req, res) => {
     type: 'targetProjectChanged',
     projectPath: result.projectPath,
     projectName: result.projectName,
+    projects: routing.getProjectsList(),
     source: 'REST API'
   });
-  res.json(result);
+  res.json({ ...result, projects: routing.getProjectsList() });
 });
 
 app.get('/api/tasks/queue', (req, res) => {

@@ -104,15 +104,17 @@ function setTargetProject(newPath) {
   }
 }
 
-function updateMode({ g5h, c5h, cWeekly, resumeAt, geminiResetAt, claudeResetAt }) {
+function updateMode({ g5h, gWeekly = 1, c5h, cWeekly, resumeAt, geminiResetAt, claudeResetAt }) {
   const prev = state.mode;
+  const geminiLow = g5h < 0.02 || gWeekly < 0.02;
+  const geminiOk = g5h > 0.10 && gWeekly > 0.05;
   const claudeLow = c5h < 0.02 || cWeekly < 0.02;
   const claudeOk = c5h > 0.02 && cWeekly > 0.02;
   const claudeRecovered = c5h > 0.10 && cWeekly > 0.10;
   let next = prev || 'gemini';
-  if (g5h > 0.10) next = 'gemini';
+  if (geminiOk) next = 'gemini';
   else if (!prev || prev === 'gemini') {
-    if (g5h < 0.02) next = claudeOk ? 'claude' : 'rest';
+    if (geminiLow) next = claudeOk ? 'claude' : 'rest';
   } else if (prev === 'claude') {
     if (claudeLow) next = 'rest';
   } else if (prev === 'rest') {
@@ -161,7 +163,68 @@ function allSessionsMap() {
   return m;
 }
 
+const PROJECTS_FILE = path.join(__dirname, 'projects.json');
+
+function loadProjectsRegistry() {
+  try {
+    if (fs.existsSync(PROJECTS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8'));
+      if (Array.isArray(data)) return data;
+    }
+  } catch (_) {}
+  return [
+    { name: 'AziendaAI', path: path.resolve(__dirname), isDefault: true, addedAt: new Date().toISOString() }
+  ];
+}
+
+function saveProjectsRegistry(list) {
+  try {
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(list, null, 2), 'utf8');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function getProjectsList() {
+  const list = loadProjectsRegistry();
+  const current = getTargetProject();
+  return list.map(p => ({
+    ...p,
+    isActive: path.resolve(p.path).toLowerCase() === path.resolve(current).toLowerCase()
+  }));
+}
+
+function addProjectToRegistry(name, rawPath) {
+  const res = setTargetProject(rawPath);
+  if (!res.ok) return res;
+  const list = loadProjectsRegistry();
+  const projPath = res.projectPath;
+  const projName = String(name || res.projectName).trim();
+  const existingIdx = list.findIndex(p => path.resolve(p.path).toLowerCase() === projPath.toLowerCase());
+  if (existingIdx >= 0) {
+    list[existingIdx].name = projName;
+  } else {
+    list.push({ name: projName, path: projPath, addedAt: new Date().toISOString() });
+  }
+  saveProjectsRegistry(list);
+  return { ok: true, projectPath: projPath, projectName: projName, list: getProjectsList() };
+}
+
+function selectProjectByNameOrPath(query) {
+  const q = String(query || '').trim().toLowerCase();
+  const list = loadProjectsRegistry();
+  const found = list.find(p => p.name.toLowerCase() === q || path.resolve(p.path).toLowerCase() === q);
+  if (found) {
+    return setTargetProject(found.path);
+  }
+  return setTargetProject(query);
+}
+
 module.exports = {
+  getProjectsList,
+  addProjectToRegistry,
+  selectProjectByNameOrPath,
   updateMode,
   getMode,
   isResting,

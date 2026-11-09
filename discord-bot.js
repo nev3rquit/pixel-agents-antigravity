@@ -145,24 +145,40 @@ function initDiscordBot(onBroadcast) {
     const content = message.content.trim();
     if (content.toLowerCase().startsWith('!project') || content.toLowerCase().startsWith('!workspace') || content.toLowerCase().startsWith('!progetto')) {
       const arg = content.replace(/^!(project|workspace|progetto)\s*/i, '').trim();
-      if (!arg) {
+      if (!arg || arg.toLowerCase() === 'list') {
         const cur = routing.getTargetProject();
-        await message.channel.send(`📂 **Progetto Target Attivo:** \`${cur}\`\n💡 *Usa \`!project <percorso>\` per cambiare il repository/progetto su cui lavorano Alberto, Luigi, Gabri e Carlo.*`).catch(() => {});
+        const list = typeof routing.getProjectsList === 'function' ? routing.getProjectsList() : [];
+        let listStr = list.map(p => (p.isActive ? '👉 **[ATTIVO]** ' : '• ') + '**' + p.name + '**: `' + p.path + '`').join('\n');
+        await message.channel.send('🏢 **Progetti Software House Registrati:**\n' + (listStr || 'Nessuno') + '\n\n💡 *Usa `!project <nome o percorso>` oppure `!project add <nome> <percorso>`*').catch(() => {});
         return;
       }
-      const res = routing.setTargetProject(arg);
+      if (arg.toLowerCase().startsWith('add ')) {
+        const parts = arg.slice(4).trim().split(/\s+/);
+        const name = parts[0];
+        const pPath = parts.slice(1).join(' ');
+        if (!name || !pPath) {
+          await message.channel.send('⚠️ Sintassi corretta: `!project add <NomeProgetto> <PercorsoAssoluto>`').catch(() => {});
+          return;
+        }
+        const res = routing.addProjectToRegistry(name, pPath);
+        if (!res.ok) {
+          await message.channel.send('❌ **Errore aggiunta progetto:** ' + res.error).catch(() => {});
+          return;
+        }
+        await message.channel.send('🎉 **Progetto "' + name + '" aggiunto e attivato!**\n📂 Percorso: `' + res.projectPath + '`').catch(() => {});
+        if (broadcastCallback) {
+          broadcastCallback({ type: 'targetProjectChanged', projectPath: res.projectPath, projectName: res.projectName, projects: routing.getProjectsList(), source: 'Discord (' + message.author.username + ')' });
+        }
+        return;
+      }
+      const res = typeof routing.selectProjectByNameOrPath === 'function' ? routing.selectProjectByNameOrPath(arg) : routing.setTargetProject(arg);
       if (!res.ok) {
-        await message.channel.send(`❌ **Errore cambio progetto:** ${res.error}`).catch(() => {});
+        await message.channel.send('❌ **Errore cambio progetto:** ' + res.error).catch(() => {});
         return;
       }
-      await message.channel.send(`✅ **Progetto Target aggiornato!**\n📂 Ora il team lavora su: \`${res.projectPath}\``).catch(() => {});
+      await message.channel.send('✅ **Progetto Target aggiornato!**\n📂 Ora il team lavora su: `' + res.projectPath + '`').catch(() => {});
       if (broadcastCallback) {
-        broadcastCallback({
-          type: 'targetProjectChanged',
-          projectPath: res.projectPath,
-          projectName: res.projectName,
-          source: `Discord (${message.author.username})`
-        });
+        broadcastCallback({ type: 'targetProjectChanged', projectPath: res.projectPath, projectName: res.projectName, projects: typeof routing.getProjectsList === 'function' ? routing.getProjectsList() : [], source: 'Discord (' + message.author.username + ')' });
       }
       return;
     }
