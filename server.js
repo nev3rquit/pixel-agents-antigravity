@@ -38,6 +38,7 @@ const { execFile, exec } = require('child_process');
 const { PNG } = require('pngjs');
 const { setDiscordWebhook, sendDiscordNotification, getDiscordConfig } = require('./discord-bridge');
 const routing = require('./routing');
+const ghostWorkspace = require('./ghost-workspace');
 const { resolveLanguageServer } = require('./antigravity-path');
 const { initDiscordBot, broadcastToDiscord, sendDiscordPermissionPrompt, sendFinalAgentResponse, updateDiscordUsageMonitor, sendDiscordAnnouncement } = require('./discord-bot');
 
@@ -1431,6 +1432,39 @@ app.post('/api/project', (req, res) => {
     source: 'REST API'
   });
   res.json({ ...result, projects: routing.getProjectsList() });
+});
+
+
+// GHOST WORKSPACE IN DOCKER (IDEA #6)
+app.get('/api/ghost/status', async (req, res) => {
+  try {
+    const status = await ghostWorkspace.checkDockerStatus();
+    res.json({ ok: true, ...status });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/ghost/run', async (req, res) => {
+  const { command, imageName, timeoutMs } = req.body || {};
+  const projPath = routing.getTargetProject() || WORKSPACE_DIR;
+  try {
+    const result = await ghostWorkspace.executeGhostCommand({
+      command,
+      projectPath: projPath,
+      imageName: imageName || 'node:alpine',
+      timeoutMs: timeoutMs || 30000
+    });
+    broadcast({
+      type: 'ghostCommandResult',
+      command,
+      result,
+      source: 'REST API'
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 app.get('/api/tasks/queue', (req, res) => {

@@ -119,6 +119,15 @@ async function runTests() {
   assert('POST /api/ceo-report contiene report markdown e statistiche', postReport.body && typeof postReport.body.report === 'string' && postReport.body.stats !== undefined);
 
   // 3. COLLAUDO WEBSOCKET: STATO INIZIALE & MESSAGGI DI COORDINAMENTO
+    // GHOST WORKSPACE TESTS (IDEA #6)
+  const getGhostStatus = await httpRequest('GET', '/api/ghost/status');
+  assert('GET /api/ghost/status risponde 200', getGhostStatus.status === 200 && getGhostStatus.body.ok === true);
+  assert('GET /api/ghost/status ritorna engine e status', getGhostStatus.body && Boolean(getGhostStatus.body.engine));
+
+  const postGhostRun = await httpRequest('POST', '/api/ghost/run', { command: 'node -e "console.log(12345)"' });
+  assert('POST /api/ghost/run risponde 200', postGhostRun.status === 200 && postGhostRun.body.ok === true);
+  assert('POST /api/ghost/run esegue comando e ritorna output', postGhostRun.body && postGhostRun.body.output && postGhostRun.body.output.includes('12345'));
+
   console.log('\n--- 3. Collaudo WebSocket & Sincronizzazione Live ---');
 
   await new Promise((resolveWs, rejectWs) => {

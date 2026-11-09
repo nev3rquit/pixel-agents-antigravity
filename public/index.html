@@ -434,6 +434,15 @@
         color: #f85149;
         border: 1px solid rgba(248, 81, 73, 0.4);
       }
+      .log-entry.cmd-box.ghost-mode {
+        border-left: 3px solid #bc8cff;
+        background: rgba(188, 140, 255, 0.08);
+      }
+      .cmd-code.ghost-badge {
+        background: rgba(188, 140, 255, 0.25);
+        color: #d2a8ff;
+        border: 1px solid rgba(188, 140, 255, 0.5);
+      }
       .cmd-stdout {
         background: #080c10;
         border: 1px solid #21262d;
@@ -726,6 +735,7 @@
           <button class="quick-chip" id="chip-lounge" style="border-color:#bc8cff; color:#bc8cff;" onclick="toggleLoungeBreak()">☕ Pausa Divano</button>
           <button class="quick-chip" id="chip-standup" style="border-color:#3fb950; color:#3fb950;" onclick="triggerStandupMeeting()">📢 Convoca Riunione</button>
           <button class="quick-chip" id="chip-report" style="border-color:#f778ba; color:#f778ba;" onclick="openCeoReportModal(false)">📊 Report CEO</button>
+          <button class="quick-chip" id="chip-ghost" style="border-color:#bc8cff; color:#d2a8ff;" onclick="promptGhostRun()">👻 Ghost Sandbox</button>
         </div>
 
         <div class="command-bar">
@@ -1293,6 +1303,7 @@
 
         updateStatusDisplay(selectedId);
         renderPermissionBox();
+        updateTokenDisplay(selectedId);
         updateLoungeChipUI();
 
         drawerLogs.innerHTML = '';
@@ -1355,12 +1366,15 @@
 
       function renderCmdBox(item) {
         const div = document.createElement('div');
-        div.className = 'log-entry cmd-box';
+        div.className = 'log-entry cmd-box' + (item.isGhost ? ' ghost-mode' : '');
         const isSuccess = item.code === 0;
         div.innerHTML = `
           <div class="cmd-res-header">
-            <span>⚙️ ${escapeHtml(item.cmd)}</span>
-            <span class="cmd-code ${isSuccess ? 'success' : 'err'}">${isSuccess ? 'exit 0' : 'exit ' + item.code}</span>
+            <span>${item.isGhost ? '👻 [GHOST SANDBOX] ' : '⚙️ '}${escapeHtml(item.cmd)}</span>
+            <div style="display:flex; gap:6px;">
+              ${item.isGhost ? '<span class="cmd-code ghost-badge">' + escapeHtml(item.engine || 'docker') + '</span>' : ''}
+              <span class="cmd-code ${isSuccess ? 'success' : 'err'}">${isSuccess ? 'exit 0' : 'exit ' + item.code}</span>
+            </div>
           </div>
           <pre class="cmd-stdout">${escapeHtml(item.output)}</pre>
         `;
@@ -2597,6 +2611,46 @@
       };
 
       applyLanguage();
+
+      window.promptGhostRun = function() {
+        const cmd = prompt(appLang === 'it' 
+          ? 'Inserisci il comando da testare in Ghost Workspace Sandbox (es. npm test, ls -la):' 
+          : 'Enter command to test in Ghost Workspace Sandbox (e.g. npm test, ls -la):',
+          'git status --short'
+        );
+        if (!cmd || !cmd.trim()) return;
+        runGhostCommandUI(cmd.trim());
+      };
+
+      window.runGhostCommandUI = function(cmd) {
+        playRetroSound('click');
+        const time = new Date().toLocaleTimeString();
+        appendLog(selectedId, `[${time}] 👻 Avvio esecuzione comando in Ghost Sandbox: "${cmd}"`, 'activity');
+        fetch('/api/ghost/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: cmd })
+        })
+        .then(r => r.json())
+        .then(data => {
+          playRetroSound(data.success ? 'complete' : 'permission');
+          const item = {
+            isCmdBox: true,
+            isGhost: true,
+            engine: data.engine,
+            cmd: cmd,
+            output: data.output || 'Esecuzione completata.',
+            code: data.exitCode || 0,
+            time: new Date().toLocaleTimeString()
+          };
+          agentLogs[selectedId] = agentLogs[selectedId] || [];
+          agentLogs[selectedId].push(item);
+          renderCmdBox(item);
+        })
+        .catch(err => {
+          appendLog(selectedId, `[${new Date().toLocaleTimeString()}] ❌ Errore Ghost Workspace: ${err.message}`, 'perm-warn');
+        });
+      };
 
       window.simulateDelegationWalk = function() {
         const targetId = selectedId === 10 ? 6 : selectedId;
