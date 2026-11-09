@@ -171,17 +171,18 @@ async function executeGhostCommand({ command, projectPath, imageName = 'node:alp
         // Copia leggera dei soli file manifest e config (package.json, js, ecc.) senza node_modules pesanti
         copyShallowProject(targetDir, sandboxDir);
 
-        // Esecuzione SENZA shell (execFile) con allowlist binari: niente command injection
+        // Docker spento: SOLO comandi git di sola lettura (status/diff/log), senza shell
         const argv = tokenizeCommand(cleanCmd);
-        const bin = argv && argv[0] ? path.basename(argv[0]).toLowerCase().replace(/\.exe$/, '') : '';
-        if (!argv || !argv.length || argv[0] !== path.basename(argv[0]) || !LOCAL_ALLOWED_BINS.has(bin)) {
+        const RO_GIT = new Set(['status', 'diff', 'log']);
+        const argOk = (a) => /^[A-Za-z0-9_.\/\\:=@~^,-]+$/.test(a) && !/^--?(output|ext-diff|textconv|exec|open-files|upload-pack|c$)/i.test(a);
+        if (!argv || argv.length < 2 || argv[0] !== 'git' || !RO_GIT.has(argv[1]) || !argv.slice(2).every(argOk)) {
           try { fs.rmSync(sandboxDir, { recursive: true, force: true }); } catch (_) {}
-          return resolve({ success: false, exitCode: 126, output: 'Ghost locale: comando non consentito. Binari ammessi senza Docker: ' + [...LOCAL_ALLOWED_BINS].join(', '), engine: 'local-ghost', sandboxId, durationMs: Date.now() - startTime });
+          return resolve({ success: false, exitCode: 126, output: 'Esecuzione protetta Ghost richiede Docker Desktop attivo. Senza Docker sono consentiti solo comandi di sola lettura: git status, git diff, git log.', engine: 'local-ghost', sandboxId, durationMs: Date.now() - startTime });
         }
-        const safeEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: sandboxDir, TMP: sandboxDir, HOME: sandboxDir, USERPROFILE: sandboxDir, GHOST_SANDBOX: '1', NODE_ENV: 'test' };
-
-        execFile(argv[0], argv.slice(1), {
-          cwd: sandboxDir,
+        const safeEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: os.devNull, GIT_OPTIONAL_LOCKS: '0', GHOST_SANDBOX: '1' };
+        // git deve leggere il repo reale in sola lettura: cwd = progetto reale
+        execFile('git', ['--no-pager', ...argv.slice(1)], {
+          cwd: targetDir,
           timeout: parsedTimeout,
           windowsHide: true,
           env: safeEnv,

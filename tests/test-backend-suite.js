@@ -124,9 +124,12 @@ async function runTests() {
   assert('GET /api/ghost/status risponde 200', getGhostStatus.status === 200 && getGhostStatus.body.ok === true);
   assert('GET /api/ghost/status ritorna engine e status', getGhostStatus.body && Boolean(getGhostStatus.body.engine));
 
-  const postGhostRun = await httpRequest('POST', '/api/ghost/run', { command: 'node -e "console.log(12345)"' });
+  const postGhostRun = await httpRequest('POST', '/api/ghost/run', { command: 'git status' });
   assert('POST /api/ghost/run risponde 200', postGhostRun.status === 200 && postGhostRun.body.ok === true);
-  assert('POST /api/ghost/run esegue comando e ritorna output', postGhostRun.body && postGhostRun.body.output && postGhostRun.body.output.includes('12345'));
+  assert('POST /api/ghost/run esegue comando e ritorna output', postGhostRun.body && typeof postGhostRun.body.output === 'string' && postGhostRun.body.output.length > 0);
+  const postGhostArb = await httpRequest('POST', '/api/ghost/run', { command: 'node -e "console.log(12345)"' });
+  const arbDockerOff = postGhostArb.body && postGhostArb.body.engine === 'local-ghost';
+  assert('POST /api/ghost/run: comando arbitrario rifiutato se Docker spento', !arbDockerOff || (postGhostArb.body.success === false && postGhostArb.body.exitCode === 126));
 
   console.log('\n--- 3. Collaudo WebSocket & Sincronizzazione Live ---');
 

@@ -146,6 +146,17 @@ function initDiscordBot(onBroadcast) {
     const content = message.content.trim();
         if (content.toLowerCase().startsWith('!ghost') || content.toLowerCase().startsWith('!sandbox')) {
       const gCmd = content.replace(/^!(ghost|sandbox)\s*/i, '').trim();
+      // Autorizzazione: solo guild (no DM) e utente in ghostAllowedUserIds (discord.config.json / env GHOST_ALLOWED_USER_IDS) o Administrator
+      let ghostAllowed = [];
+      try {
+        const gcfg = fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {};
+        ghostAllowed = (Array.isArray(gcfg.ghostAllowedUserIds) ? gcfg.ghostAllowedUserIds : []).concat((process.env.GHOST_ALLOWED_USER_IDS || '').split(',')).map(s => String(s).trim()).filter(Boolean);
+      } catch (_) {}
+      const isAdmin = !!(message.guild && message.member && message.member.permissions && message.member.permissions.has('Administrator'));
+      if (!message.guild || !(ghostAllowed.includes(message.author.id) || isAdmin)) {
+        await message.channel.send('⛔ Non autorizzato a usare !ghost / !sandbox.').catch(() => {});
+        return;
+      }
       if (!gCmd) {
         const dStatus = await ghostWorkspace.checkDockerStatus();
         await message.channel.send(`👻 **Ghost Workspace Sandbox Status:**\n• **Motore:** \`${dStatus.engine}\`\n• **Stato:** ${dStatus.status}\`\n\n💡 *Usa \`!ghost <comando>\` per eseguire test o script in ambiente isolato senza toccare i file reali!*`).catch(() => {});
