@@ -36,6 +36,7 @@ const { execFile, exec } = require('child_process');
 const { PNG } = require('pngjs');
 const { setDiscordWebhook, sendDiscordNotification, getDiscordConfig } = require('./discord-bridge');
 const routing = require('./routing');
+const { resolveLanguageServer } = require('./antigravity-path');
 const { initDiscordBot, broadcastToDiscord, sendDiscordPermissionPrompt, sendFinalAgentResponse, updateDiscordUsageMonitor, sendDiscordAnnouncement } = require('./discord-bot');
 
 const app = express();
@@ -275,8 +276,8 @@ function dispatchRealTask(agent, rawInput) {
       }
     }
 
-    // Invia direttamente tramite l'eseguibile nativo language_server.exe agentapi send-message
-    const serverExe = path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'antigravity', 'resources', 'bin', 'language_server.exe');
+    // Invia direttamente tramite l'eseguibile nativo language_server agentapi send-message
+    const serverExe = resolveLanguageServer();
     const activeProj = routing.getTargetProject();
     const msgContent = `[Progetto Target Attivo: ${activeProj}] Messaggio operativo dalla Dashboard Web AziendaAI: ${text}`;
 

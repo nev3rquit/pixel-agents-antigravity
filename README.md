@@ -128,12 +128,22 @@ Because every Antigravity installation uses local conversation `UUIDs` on your m
 ```bash
 node setup-agents.js
 ```
-This script automatically talks to your local `language_server.exe`, creates your **4 Primary Agents (Gemini)** + **4 Alterego Agents (Claude)** based on [`team.config.json`](./team.config.json), and writes your private UUIDs to `agents.config.json` (gitignored).
+This script automatically talks to your local Antigravity `language_server`, creates your **4 Primary Agents (Gemini)** + **4 Alterego Agents (Claude)** based on [`team.config.json`](./team.config.json), and writes your private UUIDs to `agents.config.json` (gitignored).
+
+If your Antigravity plan doesn't include the models in `team.config.json`, the script lists the ones you have; override them with e.g. `ALTEREGO_MODEL=claude-sonnet-4-6 node setup-agents.js` (also `PRIMARY_MODEL`).
 
 ### 4. Launch Headless (`start.vbs`)
 Double-click **`start.vbs`**:
 - Starts the Node.js server silently in the background (**zero open CMD windows**).
 - Automatically opens your browser to 👉 **`http://localhost:3000`**.
+
+**Linux / macOS:** run `./start.sh` instead (`./start.sh --headless` skips opening the browser; logs go to `server.log`).
+
+The Antigravity `language_server` binary is auto-detected (standard install dirs, the `antigravity` launcher on your `PATH`, or the running Antigravity process on Linux). For a non-standard install (e.g. an extracted tarball), point to it explicitly:
+```bash
+export ANTIGRAVITY_HOME=/path/to/Antigravity-x64   # folder containing resources/bin/
+# or: export ANTIGRAVITY_LS_PATH=/path/to/resources/bin/language_server
+```
 
 ---
 

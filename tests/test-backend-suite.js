@@ -68,16 +68,21 @@ async function runTests() {
   const nullByteRes = routing.setTargetProject('my-project\0/sensitive');
   assert('Rifiuto null bytes', nullByteRes.ok === false);
 
-  const rootDriveRes = routing.setTargetProject('C:\\');
-  assert('Rifiuto root disco C:\\', rootDriveRes.ok === false);
+  const IS_WIN = process.platform === 'win32';
+  const SYS = IS_WIN
+    ? { root: 'C:\\', a: 'C:\\Windows', b: 'C:\\Program Files', missing: 'C:\\cartella_inesistente_xyz_123' }
+    : { root: '/', a: '/etc', b: '/usr/bin', missing: '/tmp/cartella_inesistente_xyz_123' };
 
-  const sysWinRes = routing.setTargetProject('C:\\Windows');
-  assert('Rifiuto cartella di sistema C:\\Windows', sysWinRes.ok === false && sysWinRes.error.includes('protetta'));
+  const rootDriveRes = routing.setTargetProject(SYS.root);
+  assert(`Rifiuto root disco ${SYS.root}`, rootDriveRes.ok === false);
 
-  const sysProgRes = routing.setTargetProject('C:\\Program Files');
-  assert('Rifiuto cartella di sistema C:\\Program Files', sysProgRes.ok === false && sysProgRes.error.includes('protetta'));
+  const sysWinRes = routing.setTargetProject(SYS.a);
+  assert(`Rifiuto cartella di sistema ${SYS.a}`, sysWinRes.ok === false && sysWinRes.error.includes('protetta'));
 
-  const nonExistentRes = routing.setTargetProject('C:\\cartella_inesistente_xyz_123');
+  const sysProgRes = routing.setTargetProject(SYS.b);
+  assert(`Rifiuto cartella di sistema ${SYS.b}`, sysProgRes.ok === false && sysProgRes.error.includes('protetta'));
+
+  const nonExistentRes = routing.setTargetProject(SYS.missing);
   assert('Rifiuto directory non esistente', nonExistentRes.ok === false && nonExistentRes.error.includes('non trovata'));
 
   const validAzienda = routing.setTargetProject(path.resolve(__dirname, '..'));
@@ -96,7 +101,7 @@ async function runTests() {
   assert('POST /api/project (valido) risponde 200', postProjValid.status === 200 && postProjValid.body.ok === true);
 
   // POST /api/project traversal/system (invalido)
-  const postProjInvalid = await httpRequest('POST', '/api/project', { projectPath: 'C:\\Windows' });
+  const postProjInvalid = await httpRequest('POST', '/api/project', { projectPath: SYS.a });
   assert('POST /api/project (cartella protetta) risponde 400', postProjInvalid.status === 400 && postProjInvalid.body.ok === false);
 
   // GET /api/tasks/queue

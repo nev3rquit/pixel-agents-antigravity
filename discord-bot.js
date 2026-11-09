@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const routing = require('./routing');
+const { resolveLanguageServer } = require('./antigravity-path');
 
 const DAEMON_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'daemon');
 let cachedDaemonConfig = null;
@@ -71,7 +72,6 @@ try {
     if (cfg.botToken) BOT_TOKEN = cfg.botToken;
   }
 } catch (_) {}
-const SERVER_EXE = path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'antigravity', 'resources', 'bin', 'language_server.exe');
 
 const SUBAGENT_CHANNELS = {
   'alberto-ceo': { id: 10, channelKeyword: 'alberto', subagentId: routing.PRIMARY[10], name: 'Alberto (CEO)', color: 0x58a6ff },
@@ -201,7 +201,7 @@ function initDiscordBot(onBroadcast) {
         childEnv.ANTIGRAVITY_CSRF_TOKEN = daemonCfg.csrfToken;
       }
 
-      execFile(SERVER_EXE, ['agentapi', 'send-message', routing.resolveSubagent(target.id), msgContent], { timeout: 15000, windowsHide: true, env: childEnv }, (err, stdout, stderr) => {
+      execFile(resolveLanguageServer(), ['agentapi', 'send-message', routing.resolveSubagent(target.id), msgContent], { timeout: 15000, windowsHide: true, env: childEnv }, (err, stdout, stderr) => {
         if (err) {
           message.channel.send(`❌ Errore recapito a ${target.name}: ${err.message}`).catch(() => {});
         } else {

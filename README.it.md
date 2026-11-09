@@ -128,12 +128,22 @@ Ogni installazione di Antigravity usa ID conversazione (`UUID`) generati localme
 ```bash
 node setup-agents.js
 ```
-Lo script contatta automaticamente il tuo `language_server.exe` locale, crea i tuoi **4 Agenti Primari (Gemini)** + i **4 Alterego (Claude)** secondo le specifiche di [`team.config.json`](./team.config.json) e salva i tuoi UUID nel file locale `agents.config.json` (protetto da `.gitignore`).
+Lo script contatta automaticamente il `language_server` locale di Antigravity, crea i tuoi **4 Agenti Primari (Gemini)** + i **4 Alterego (Claude)** secondo le specifiche di [`team.config.json`](./team.config.json) e salva i tuoi UUID nel file locale `agents.config.json` (protetto da `.gitignore`).
+
+Se il tuo piano Antigravity non include i modelli di `team.config.json`, lo script elenca quelli disponibili; puoi sovrascriverli ad es. con `ALTEREGO_MODEL=claude-sonnet-4-6 node setup-agents.js` (anche `PRIMARY_MODEL`).
 
 ### 4. Avvia Senza Finestre CMD (`start.vbs`)
 Fai **doppio click su `start.vbs`**:
 - Il server parte in background in modalità completamente invisibile (nessuna finestra del prompt dei comandi aperta).
 - Si apre automaticamente il browser su 👉 **`http://localhost:3000`**.
+
+**Linux / macOS:** usa invece `./start.sh` (`./start.sh --headless` non apre il browser; i log finiscono in `server.log`).
+
+L'eseguibile `language_server` di Antigravity viene rilevato automaticamente (cartelle di installazione standard, launcher `antigravity` nel `PATH` oppure, su Linux, il processo di Antigravity in esecuzione). Per installazioni non standard (es. tarball estratto) indicalo esplicitamente:
+```bash
+export ANTIGRAVITY_HOME=/percorso/Antigravity-x64   # cartella che contiene resources/bin/
+# oppure: export ANTIGRAVITY_LS_PATH=/percorso/resources/bin/language_server
+```
 
 ---
 

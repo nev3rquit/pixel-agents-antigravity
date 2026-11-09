@@ -65,9 +65,10 @@ function setTargetProject(newPath) {
       return { ok: false, error: 'Impossibile selezionare la directory radice come cartella di progetto' };
     }
 
-    // Protezione percorsi di sistema critici (Windows / OS)
-    const lower = resolved.toLowerCase();
-    const forbidden = [
+    // Protezione percorsi di sistema critici (Windows / Linux / macOS)
+    const isWin = process.platform === 'win32';
+    const cmp = isWin ? resolved.toLowerCase() : resolved;
+    const forbidden = isWin ? [
       'c:\\windows',
       'c:\\program files',
       'c:\\program files (x86)',
@@ -75,8 +76,12 @@ function setTargetProject(newPath) {
       'c:\\recovery',
       'c:\\$recycle.bin',
       'c:\\system volume information'
+    ] : [
+      '/bin', '/boot', '/dev', '/etc', '/lib', '/lib32', '/lib64', '/libx32',
+      '/proc', '/root', '/sbin', '/sys', '/usr',
+      '/System', '/Library', '/private'
     ];
-    if (forbidden.some(f => lower === f || lower.startsWith(f + '\\'))) {
+    if (forbidden.some(f => cmp === f || cmp.startsWith(f + path.sep))) {
       return { ok: false, error: 'Accesso negato: directory di sistema protetta' };
     }
 
