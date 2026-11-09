@@ -704,23 +704,6 @@
               <span id="label-claude-quota" style="color:#8b949e;">🧠 Quota Claude (5h / Settimana):</span>
               <strong id="global-claude-quota" style="color:#3fb950;">-- / --</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span id="label-ghost-status" style="color:#8b949e;">👻 Ghost Sandbox:</span>
-              <strong id="ghost-status-indicator" style="color:#d2a8ff;" title="">--</strong>
-            </div>
-            <script>
-              (function pollGhostStatus() {
-                const el = document.getElementById('ghost-status-indicator');
-                const upd = () => fetch('/api/ghost/status').then(r => r.json()).then(d => {
-                  if (!el) return;
-                  const isDocker = d && d.available;
-                  el.textContent = 'Attivo (' + (isDocker ? 'Docker' : 'Local Isolation') + ')';
-                  el.title = d.status || '';
-                  el.style.color = '#d2a8ff';
-                }).catch(() => { if (el) { el.textContent = 'Non raggiungibile'; el.style.color = '#da3633'; } });
-                upd(); setInterval(upd, 30000);
-              })();
-            </script>
           </div>
         </div>
 
@@ -752,7 +735,6 @@
           <button class="quick-chip" id="chip-lounge" style="border-color:#bc8cff; color:#bc8cff;" onclick="toggleLoungeBreak()">☕ Pausa Divano</button>
           <button class="quick-chip" id="chip-standup" style="border-color:#3fb950; color:#3fb950;" onclick="triggerStandupMeeting()">📢 Convoca Riunione</button>
           <button class="quick-chip" id="chip-report" style="border-color:#f778ba; color:#f778ba;" onclick="openCeoReportModal(false)">📊 Report CEO</button>
-          <button class="quick-chip" id="chip-ghost" style="border-color:#bc8cff; color:#d2a8ff;" onclick="promptGhostRun()">👻 Ghost Sandbox</button>
         </div>
 
         <div class="command-bar">
@@ -2642,47 +2624,6 @@
       };
 
       applyLanguage();
-
-      window.promptGhostRun = function() {
-        const cmd = prompt(appLang === 'it' 
-          ? 'Inserisci il comando da testare in Ghost Workspace Sandbox (es. npm test, ls -la):' 
-          : 'Enter command to test in Ghost Workspace Sandbox (e.g. npm test, ls -la):',
-          'git status --short'
-        );
-        if (!cmd || !cmd.trim()) return;
-        runGhostCommandUI(cmd.trim());
-      };
-
-      window.runGhostCommandUI = function(cmd) {
-        playRetroSound('click');
-        const time = new Date().toLocaleTimeString();
-        appendLog(selectedId, `[${time}] 👻 Avvio esecuzione comando in Ghost Sandbox: "${cmd}"`, 'activity');
-        fetch('/api/ghost/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: cmd })
-        })
-        .then(r => r.json())
-        .then(data => {
-          const failed = data.ok === false || (data.success === undefined && data.error);
-          playRetroSound(!failed && data.success ? 'complete' : 'permission');
-          const item = {
-            isCmdBox: true,
-            isGhost: true,
-            engine: data.engine,
-            cmd: cmd,
-            output: data.output || data.error || 'Esecuzione completata.',
-            code: failed ? (data.exitCode || 1) : (data.exitCode || 0),
-            time: new Date().toLocaleTimeString()
-          };
-          agentLogs[selectedId] = agentLogs[selectedId] || [];
-          agentLogs[selectedId].push(item);
-          renderCmdBox(item);
-        })
-        .catch(err => {
-          appendLog(selectedId, `[${new Date().toLocaleTimeString()}] ❌ Errore Ghost Workspace: ${err.message}`, 'perm-warn');
-        });
-      };
 
       window.simulateDelegationWalk = function() {
         const targetId = selectedId === 10 ? 6 : selectedId;

@@ -38,7 +38,6 @@ const { execFile, exec } = require('child_process');
 const { PNG } = require('pngjs');
 const { setDiscordWebhook, sendDiscordNotification, getDiscordConfig } = require('./discord-bridge');
 const routing = require('./routing');
-const ghostWorkspace = require('./ghost-workspace');
 const { resolveLanguageServer } = require('./antigravity-path');
 const { initDiscordBot, broadcastToDiscord, sendDiscordPermissionPrompt, sendFinalAgentResponse, updateDiscordUsageMonitor, sendDiscordAnnouncement } = require('./discord-bot');
 
@@ -1471,51 +1470,6 @@ app.post('/api/project', (req, res) => {
 });
 
 
-// GHOST WORKSPACE IN DOCKER (IDEA #6)
-app.get('/api/ghost/status', async (req, res) => {
-  try {
-    const status = await ghostWorkspace.checkDockerStatus();
-    res.json({ ok: true, ...status });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.post('/api/ghost/run', async (req, res) => {
-  const { command, imageName, timeoutMs } = req.body || {};
-  if (!command || typeof command !== 'string' || !command.trim()) {
-    return res.status(400).json({
-      ok: false,
-      error: 'Parametro "command" obbligatorio e non vuoto.'
-    });
-  }
-
-  const projPath = routing.getTargetProject() || WORKSPACE_DIR;
-  try {
-    const result = await ghostWorkspace.executeGhostCommand({
-      command,
-      projectPath: projPath,
-      imageName: imageName || 'node:alpine',
-      timeoutMs: timeoutMs || 30000
-    });
-
-    try {
-      broadcast({
-        type: 'ghostCommandResult',
-        command,
-        result,
-        source: 'REST API'
-      });
-    } catch (bErr) {
-      console.warn('[Ghost] Errore broadcast WS:', bErr.message);
-    }
-
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    console.error('[Ghost] Errore esecuzione ghost command:', err);
-    res.status(500).json({ ok: false, error: err.message || 'Errore interno durante esecuzione ghost command' });
-  }
-});
 
 app.get('/api/tasks/queue', (req, res) => {
   res.json({ queue: loadTaskQueue(), mode: routing.getMode() });

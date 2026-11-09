@@ -5,7 +5,6 @@ const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const routing = require('./routing');
-const ghostWorkspace = require('./ghost-workspace');
 const { resolveLanguageServer } = require('./antigravity-path');
 
 const DAEMON_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'daemon');
@@ -144,41 +143,6 @@ function initDiscordBot(onBroadcast) {
     }
 
     const content = message.content.trim();
-        if (content.toLowerCase().startsWith('!ghost') || content.toLowerCase().startsWith('!sandbox')) {
-      const gCmd = content.replace(/^!(ghost|sandbox)\s*/i, '').trim();
-      // Autorizzazione: solo guild (no DM) e utente in ghostAllowedUserIds (discord.config.json / env GHOST_ALLOWED_USER_IDS) o Administrator
-      let ghostAllowed = [];
-      try {
-        const gcfg = fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {};
-        ghostAllowed = (Array.isArray(gcfg.ghostAllowedUserIds) ? gcfg.ghostAllowedUserIds : []).concat((process.env.GHOST_ALLOWED_USER_IDS || '').split(',')).map(s => String(s).trim()).filter(Boolean);
-      } catch (_) {}
-      const isAdmin = !!(message.guild && message.member && message.member.permissions && message.member.permissions.has('Administrator'));
-      if (!message.guild || !(ghostAllowed.includes(message.author.id) || isAdmin)) {
-        await message.channel.send('⛔ Non autorizzato a usare !ghost / !sandbox.').catch(() => {});
-        return;
-      }
-      const isAllowedChannel = channelName.includes('sala-operativa') || channelName.includes('admin') || channelName.includes('dev') || channelName.includes('ghost') || channelName.includes('sandbox');
-      if (!isAllowedChannel && !isAdmin) {
-        await message.channel.send('⛔ Il comando `!ghost` può essere eseguito solo in canali autorizzati (#sala-operativa o canali dev/admin).').catch(() => {});
-        return;
-      }
-      if (!gCmd) {
-        const dStatus = await ghostWorkspace.checkDockerStatus();
-        await message.channel.send(`👻 **Ghost Workspace Sandbox Status:**\n• **Motore:** \`${dStatus.engine}\`\n• **Stato:** ${dStatus.status}\`\n\n💡 *Usa \`!ghost <comando>\` per eseguire test o script in ambiente isolato senza toccare i file reali!*`).catch(() => {});
-        return;
-      }
-      await message.channel.send(`👻 **Avvio esecuzione in Ghost Sandbox...**\n\`\`\`sh\n${gCmd}\n\`\`\``).catch(() => {});
-      const pPath = routing.getTargetProject();
-      const res = await ghostWorkspace.executeGhostCommand({ command: gCmd, projectPath: pPath });
-      const statusIcon = res.success ? '✅' : '❌';
-      const outputPreview = (res.output || 'Nessun output').slice(0, 1500);
-      await message.channel.send(`${statusIcon} **Ghost Execution Completata (${res.engine} - ${res.durationMs}ms - exit ${res.exitCode}):**\n\`\`\`text\n${outputPreview}\n\`\`\``).catch(() => {});
-      if (broadcastCallback) {
-        broadcastCallback({ type: 'ghostCommandResult', command: gCmd, result: res, source: 'Discord (' + message.author.username + ')' });
-      }
-      return;
-    }
-
     if (content.toLowerCase().startsWith('!project') || content.toLowerCase().startsWith('!workspace') || content.toLowerCase().startsWith('!progetto')) {
       const arg = content.replace(/^!(project|workspace|progetto)\s*/i, '').trim();
       if (!arg || arg.toLowerCase() === 'list') {
