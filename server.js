@@ -21,11 +21,13 @@ process.on('SIGTERM', () => {
   const msg = `[${new Date().toISOString()}] Process received SIGTERM\n`;
   console.log(msg);
   try { fs.appendFileSync(crashLogPath, msg); } catch {}
+  process.exit(143);
 });
 process.on('SIGINT', () => {
   const msg = `[${new Date().toISOString()}] Process received SIGINT\n`;
   console.log(msg);
   try { fs.appendFileSync(crashLogPath, msg); } catch {}
+  process.exit(130);
 });
 
 const express = require('express');

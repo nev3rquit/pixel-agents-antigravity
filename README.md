@@ -139,6 +139,8 @@ Double-click **`start.vbs`**:
 
 **Linux / macOS:** run `./start.sh` instead (`./start.sh --headless` skips opening the browser; logs go to `server.log`).
 
+> ⚠️ **macOS is untested.** On macOS the dashboard should run, but the Antigravity `language_server` binary is not auto-detected: set `ANTIGRAVITY_LS_PATH` to its location inside the app bundle.
+
 The Antigravity `language_server` binary is auto-detected (standard install dirs, the `antigravity` launcher on your `PATH`, or the running Antigravity process on Linux). For a non-standard install (e.g. an extracted tarball), point to it explicitly:
 ```bash
 export ANTIGRAVITY_HOME=/path/to/Antigravity-x64   # folder containing resources/bin/

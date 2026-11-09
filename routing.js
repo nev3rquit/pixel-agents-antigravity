@@ -67,7 +67,10 @@ function setTargetProject(newPath) {
 
     // Protezione percorsi di sistema critici (Windows / Linux / macOS)
     const isWin = process.platform === 'win32';
-    const cmp = isWin ? resolved.toLowerCase() : resolved;
+    // Windows e macOS usano di default filesystem case-insensitive (/ETC == /etc)
+    const caseInsensitive = isWin || process.platform === 'darwin';
+    const norm = p => caseInsensitive ? p.toLowerCase() : p;
+    const cmp = norm(resolved);
     const forbidden = isWin ? [
       'c:\\windows',
       'c:\\program files',
@@ -81,7 +84,7 @@ function setTargetProject(newPath) {
       '/proc', '/root', '/sbin', '/sys', '/usr',
       '/System', '/Library', '/private'
     ];
-    if (forbidden.some(f => cmp === f || cmp.startsWith(f + path.sep))) {
+    if (forbidden.map(norm).some(f => cmp === f || cmp.startsWith(f + path.sep))) {
       return { ok: false, error: 'Accesso negato: directory di sistema protetta' };
     }
 

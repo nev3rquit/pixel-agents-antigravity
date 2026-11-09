@@ -5,15 +5,16 @@
 #      ./start.sh --headless -> avvia senza aprire il browser
 set -euo pipefail
 
-cd "$(dirname "$(readlink -f "$0")")"
+cd "$(dirname "$0")"
 PORT=3000
 
 # Chiude eventuali vecchie istanze in ascolto sulla porta 3000
-if command -v fuser >/dev/null 2>&1; then
-  fuser -k -TERM "${PORT}/tcp" >/dev/null 2>&1 || true
-elif command -v lsof >/dev/null 2>&1; then
+# (lsof prima: e' presente su macOS, dove fuser non supporta -k/porte TCP)
+if command -v lsof >/dev/null 2>&1; then
   pids=$(lsof -t -iTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null || true)
   [ -n "$pids" ] && kill $pids 2>/dev/null || true
+elif command -v fuser >/dev/null 2>&1; then
+  fuser -k -TERM "${PORT}/tcp" >/dev/null 2>&1 || true
 fi
 sleep 0.5
 
